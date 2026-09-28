@@ -11,7 +11,7 @@
 - [SPEC.md](growing-figures/SPEC.md) — 仕様（育ち方・育ちやすさ・色・軽さ・採否の基準・登録済み／見送った図形）
 - [ADD_PATTERN.md](growing-figures/ADD_PATTERN.md) — 新しい図形を足す手順
 - [COLORS.md](growing-figures/COLORS.md) — サイトごとの色2の台帳
-- [generators.js](growing-figures/generators.js) — 生成器（ペンローズ・多重格子・ひまわり・丸い渦格子・生命の花・円弧の曼荼羅）
+- [generators.js](growing-figures/generators.js) — 生成器（ペンローズ・多重格子・ひまわり・丸い渦格子・生命の花・円弧の曼荼羅・渦の真円）
 - [ideas/](growing-figures/ideas/) — 試作の記録（見送った案を含む）
 - [sampler.html](growing-figures/sampler.html) — 見本帳（`python3 -m http.server` で `growing-figures/` を配信して開く）
 - [check.cjs](growing-figures/check.cjs) — 採否の検査（`node growing-figures/check.cjs`）

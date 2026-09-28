@@ -183,25 +183,28 @@
   function mid(p,q){return[(p[0]+q[0])/2,(p[1]+q[1])/2]}
   function range(g,a){var R=Math.max(g.W,g.H)*1.2/a+3;return Math.ceil(R)}
 
-  /* 生命の花（6回対称）：三角格子の各点を中心に、隣の点を通る円を描く。
-     円どうしが切り分ける「花びら」（格子の辺ごとに1枚）と「反った三角」（格子の三角ごとに1枚）がタイル。
-     中心から育つと、6枚の花びらの花が同心の六角に広がる。色1＝花びら、色2＝反った三角。
-     中心は同心円（円板1枚＋6・12・18等分の輪）で、その円に掛かる格子のタイルは円の分だけ削る */
-  function flower(g){
-    var a=g.edge*1.95, e0=[a,0], e1=[a/2,a*Math.sqrt(3)/2], e2=[-a/2,a*Math.sqrt(3)/2], N=range(g,a), out=[];
-    // 中心は同心円にする：半径 R0 の円板の中を、円板1枚と輪3本（6・12・18に等分）で埋め、格子のタイルは円板の分だけ削る
-    var O0=[g.ox,g.oy], R0=a*1.62, RINGS=4;
-    function keep(pts,cls,dir){var q=minusDisk(pts,O0,R0);if(q&&q.length>2&&onScreen(g,q,g.edge))out.push({p:q,cls:cls,dir:dir})}
-    for(var rk=0;rk<RINGS;rk++){
-      var r1=R0*(rk+1)/RINGS, r0=R0*rk/RINGS, m=rk?6*rk:1;
-      for(var sgm=0;sgm<m;sgm++){
-        var sh=(rk&1)?Math.PI/m:0, t0=TAU*sgm/m-Math.PI/2+sh, t1=TAU*(sgm+1)/m-Math.PI/2+sh,   // 輪ごとに半区画ずらし、放射の線が一直線に通らないようにする
-        pts=[], st=Math.max(4,Math.ceil((t1-t0)/0.05));
-        for(var q=0;q<=st;q++){var tt=t0+(t1-t0)*q/st;pts.push([O0[0]+r1*Math.cos(tt),O0[1]+r1*Math.sin(tt)])}
-        if(rk) for(q=st;q>=0;q--){var t2=t0+(t1-t0)*q/st;pts.push([O0[0]+r0*Math.cos(t2),O0[1]+r0*Math.sin(t2)])}
-        out.push({p:pts,cls:rk?(sgm+rk)&1:1,dir:rk%5});
+  /* 同心円の中心：半径 R0 の円板を、円板1枚と輪（6・12・18…に等分）で埋める。
+     輪ごとに半区画ずらし、放射の線が一直線に通らないようにする（的のような機械的な見え方を避ける） */
+  function concentric(g, R0, rings) {
+    var O0 = [g.ox, g.oy], out = [];
+    for (var rk = 0; rk < rings; rk++) {
+      var r1 = R0 * (rk + 1) / rings, r0 = R0 * rk / rings, m = rk ? 6 * rk : 1;
+      for (var sg = 0; sg < m; sg++) {
+        var sh = (rk & 1) ? Math.PI / m : 0, t0 = TAU * sg / m - Math.PI / 2 + sh, t1 = TAU * (sg + 1) / m - Math.PI / 2 + sh;
+        var pts = [], st = Math.max(4, Math.ceil((t1 - t0) / 0.05)), q;
+        for (q = 0; q <= st; q++) { var a1 = t0 + (t1 - t0) * q / st; pts.push([O0[0] + r1 * Math.cos(a1), O0[1] + r1 * Math.sin(a1)]); }
+        if (rk) for (q = st; q >= 0; q--) { var a0 = t0 + (t1 - t0) * q / st; pts.push([O0[0] + r0 * Math.cos(a0), O0[1] + r0 * Math.sin(a0)]); }
+        out.push({ p: pts, cls: rk ? (sg + rk) & 1 : 1, dir: rk % 5 });
       }
     }
+    return out;
+  }
+
+  /* 生命の花（6回対称）：三角格子の各点を中心に、隣の点を通る円を描く。
+     円どうしが切り分ける「花びら」（格子の辺ごとに1枚）と「反った三角」（格子の三角ごとに1枚）がタイル。
+     中心から育つと、6枚の花びらの花が同心の六角に広がる。色1＝花びら、色2＝反った三角 */
+  function flower(g){
+    var a=g.edge*1.95, e0=[a,0], e1=[a/2,a*Math.sqrt(3)/2], e2=[-a/2,a*Math.sqrt(3)/2], N=range(g,a), out=[];
     function P(i,j){return[g.ox+i*e0[0]+j*e1[0],g.oy+i*e0[1]+j*e1[1]]}
     function rot(v,s){var c=0.5,sn=s*Math.sqrt(3)/2;return[v[0]*c-v[1]*sn,v[0]*sn+v[1]*c]}
     for(var i=-N;i<=N;i++)for(var j=-N;j<=N;j++){
@@ -209,12 +212,14 @@
       if(O[0]<-2*a||O[0]>g.W+2*a||O[1]<-2*a||O[1]>g.H+2*a) continue;
       [e0,e1,e2].forEach(function(e,k){                      // 花びら：辺 O→V。両脇の格子点 W1・W2 を中心とする2本の弧で囲む
         var V=add(O,e), W1=add(O,rot(e,1)), W2=add(O,rot(e,-1));
-        keep(arc(W1,O,V).concat(arc(W2,V,O)),1,k);
+        var pts=arc(W1,O,V).concat(arc(W2,V,O));
+        if(onScreen(g,pts,g.edge)) out.push({p:pts,cls:1,dir:k});
       });
       [[O,add(O,e0),add(O,e1),3],[add(O,e0),add(add(O,e0),e1),add(O,e1),4]].forEach(function(T){   // 反った三角：上向きと下向き
         var A=T[0],B=T[1],C=T[2];
         function D(X,Y,Z){return sub(add(X,Y),Z)}          // 辺 XY の向こう側の格子点（そこを中心とする弧が辺をふくらませる）
-        keep(arc(D(A,B,C),A,B).concat(arc(D(B,C,A),B,C),arc(D(C,A,B),C,A)),0,T[3]);
+        var pts=arc(D(A,B,C),A,B).concat(arc(D(B,C,A),B,C),arc(D(C,A,B),C,A));
+        if(onScreen(g,pts,g.edge)) out.push({p:pts,cls:0,dir:T[3]});
       });
     }
     return out;
@@ -252,8 +257,8 @@
 
   /* 丸い渦格子で使う：対数極座標 (s = log r, θ) の道具。この座標では対数螺旋も円も直線になる。
      花びらの仕切り（半径が2倍の円）ごとに腕の本数を2倍にして、どこでもマスの大きさを揃える */
-  function bands6(g,width){
-    var r0=g.edge*1.6, far=farthest(g)+g.edge*2, out=[], r=r0;
+  function bands6(g,width,r0mul){
+    var r0=g.edge*(r0mul||1.6), far=farthest(g)+g.edge*2, out=[], r=r0;
     var n=6*Math.pow(2,Math.max(0,Math.ceil(Math.log(TAU*r0/width/6)/Math.LN2)));
     while(r<far){out.push({s0:Math.log(r),s1:Math.log(2*r),n:n});r*=2;n*=2}
     return {r0:r0,list:out};
@@ -289,10 +294,60 @@
         if(onScreen(g,pts,g.edge)) out.push({p:pts,cls:i&1,dir:((d%5)+5)%5});
       }
     });
-    // 中心：最初の帯より内側を6枚の花びらで埋める
-    var r0=Math.exp(B.list[0].s0);
-    for(var c=0;c<6;c++){var pts=[[g.ox,g.oy]];for(var q=0;q<=10;q++){var th=TAU*(c+q/10)/6;pts.push([g.ox+r0*Math.cos(th),g.oy+r0*Math.sin(th)])}out.push({p:pts,cls:1-(c&1),dir:c%5})}
-    return out;
+    // 中心：最初の帯より内側を同心円（円板＋6・12等分の輪）で埋める
+    return out.concat(concentric(g, Math.exp(B.list[0].s0), 3));
+  }
+
+  /* 渦の真円：円の渦（ドイル螺旋に近い円の詰め方）。対数極座標 (s,θ) に正三角形の格子を張り、
+     格子点ごとに真円を置く。格子は p·w1 + q·w2 = (0, 2π) を満たすように傾けるので、
+     右回り p 本・左回り q 本（21 と 34：ひまわりと同じフィボナッチ数）の螺旋に円が並ぶ。
+     等角写像なので円は外へ行くほど相似に大きくなり、仕切りの円は要らない（花びらの仕切りによる継ぎ目が出ない）。
+     半径は、3方向の隣のうち一番近い隣と接する大きさ×0.97（全部の隣とは接しきれないので、わずかにすき間が残る）。
+     円の間の「反った三角」（格子の三角 − 角の3つの円）がもう1種類のタイル。色1＝真円、色2＝すき間。
+     中心は同心円。単元「円と球」の背景を想定 */
+  function bubbles(g) {
+    var P = 21, Q = 34, out = [];
+    var al = Math.atan((2 * P + Q) / (Q * Math.sqrt(3))), L = TAU / (P * Math.sin(al) + Q * Math.sin(al + Math.PI / 3));
+    var w1 = [L * Math.cos(al), L * Math.sin(al)], w2 = [L * Math.cos(al + Math.PI / 3), L * Math.sin(al + Math.PI / 3)];
+    // 円の半径（中心までの距離に対する比）：隣 w へ接する比は |e^w − 1| / (1 + e^{Re w})。3方向で一番小さいもの
+    var ratio = 1e9;
+    [w1, w2, [w2[0] - w1[0], w2[1] - w1[1]]].forEach(function (w) {
+      var ex = Math.exp(w[0]), dx = ex * Math.cos(w[1]) - 1, dy = ex * Math.sin(w[1]);
+      ratio = Math.min(ratio, Math.sqrt(dx * dx + dy * dy) / (1 + ex));
+    });
+    ratio *= 0.97;
+    var R0 = g.edge * 4.2, sMin = Math.log(R0), sMax = Math.log(farthest(g) + g.edge * 4);
+    function node(m, k) {
+      var s = m * w1[0] + k * w2[0], th = m * w1[1] + k * w2[1], r = Math.exp(s);
+      return { s: s, c: [g.ox + r * Math.cos(th), g.oy + r * Math.sin(th)], r: r * ratio, th: th };
+    }
+    function near(c, m) { return c[0] > -m && c[0] < g.W + m && c[1] > -m && c[1] < g.H + m; }
+    // 代表の選び方：(m,k) と (m+P, k+Q) は同じ点なので、k を 0..Q−1 に限り、m は s が範囲に入るだけ回す
+    for (var k = 0; k < Q; k++) {
+      var m0 = Math.floor((sMin - 2 * L - k * w2[0]) / w1[0]) - 1, m1 = Math.ceil((sMax - k * w2[0]) / w1[0]) + 1;
+      for (var m = m0; m <= m1; m++) {
+        var A = node(m, k);
+        if (!near(A.c, A.r * 4 + g.edge)) continue;
+        // 真円（中心の円板の外にあるものだけ）
+        if (A.s - L / 2 > sMin) {
+          var cp = [];
+          for (var q = 0; q < 120; q++) { var a0 = TAU * q / 120; cp.push([A.c[0] + A.r * Math.cos(a0), A.c[1] + A.r * Math.sin(a0)]); }
+          if (onScreen(g, cp, g.edge)) out.push({ p: cp, cls: 1, dir: ((m % 5) + 5) % 5 });
+        }
+        // すき間：格子の三角2枚（上向き・下向き）から角の円を取り除く。中心の円板に掛かる分も取り除く
+        [[node(m, k), node(m + 1, k), node(m, k + 1)], [node(m + 1, k), node(m + 1, k + 1), node(m, k + 1)]].forEach(function (T, u) {
+          var pts = [];
+          for (var e = 0; e < 3; e++) {                        // 三角の辺は (s,θ) で直線 → 細かく打って写す（画面では螺旋の弧）
+            var X = T[e], Y = T[(e + 1) % 3], xs = X.s, xt = X.th, ys = Y.s, yt = Y.th, n = 12;
+            for (var z = 0; z < n; z++) { var f = z / n, ss = xs + (ys - xs) * f, tt = xt + (yt - xt) * f, rr = Math.exp(ss); pts.push([g.ox + rr * Math.cos(tt), g.oy + rr * Math.sin(tt)]); }
+          }
+          T.forEach(function (V) { if (pts && V.s - L / 2 > sMin) pts = minusDisk(pts, V.c, V.r); });
+          if (pts) pts = minusDisk(pts, [g.ox, g.oy], R0);
+          if (pts && pts.length > 2 && onScreen(g, pts, g.edge)) out.push({ p: pts, cls: 0, dir: 2 + u });
+        });
+      }
+    }
+    return out.concat(concentric(g, R0, Math.max(3, Math.round(R0 / (g.edge * 1.3)))));
   }
 
   var GENERATORS = {
@@ -303,7 +358,8 @@
     sunflower: { name: 'ひまわり（葉序）',      make: sunflower },
     whirl:     { name: '丸い渦格子（6回対称）', make: whirl },
     flower:    { name: '生命の花（6回対称）',   make: flower },
-    mandala:   { name: '円弧の曼荼羅（4回対称）', make: mandala }
+    mandala:   { name: '円弧の曼荼羅（4回対称）', make: mandala },
+    bubbles:   { name: '渦の真円（21・34の螺旋）', make: bubbles }
   };
 
   var api = { GENERATORS: GENERATORS, multigrid: multigrid };
