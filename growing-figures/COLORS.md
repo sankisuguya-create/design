@@ -30,6 +30,6 @@
 | arithmetic-timeattack | 九九（kuku） | 3 | penrose | amethyst | 床あり |
 | arithmetic-timeattack | あまりのあるわり算（divmod） | 3 | octagon | sapphire | 床あり |
 
-| arithmetic-timeattack | 円と球（予定） | 3 | bubbles | 未定 | 候補（未実装） |
+| arithmetic-timeattack | 円と球（予定） | 3 | whirl | 未定 | 候補（未実装） |
 
 新しく床を出すサイトは、この表に1行足してから実装する。同じ学年のサイトは、図形か色2のどちらか（できれば両方）を変える。

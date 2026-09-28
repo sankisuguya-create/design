@@ -165,7 +165,7 @@
   /* 多角形から円板（中心 c・半径 R）を取り除いた残り。円の内側に入った区間は、円周に沿った弧に置き換える。
      タイルが円より十分小さいので、出て入る間の弧は短い向きでよい。全部が内側なら null */
   function minusDisk(pts,c,R){
-    var n=pts.length,ins=pts.map(function(p){return Math.hypot(p[0]-c[0],p[1]-c[1])<R});
+    var n=pts.length,R2=R*R,ins=pts.map(function(p){var dx=p[0]-c[0],dy=p[1]-c[1];return dx*dx+dy*dy<R2});   // Math.hypot は遅いので2乗で比べる
     var s0=ins.indexOf(false); if(s0<0) return null; if(ins.indexOf(true)<0) return pts;
     function hit(A,B){var dx=B[0]-A[0],dy=B[1]-A[1],fx=A[0]-c[0],fy=A[1]-c[1],a=dx*dx+dy*dy,b=2*(fx*dx+fy*dy),cc=fx*fx+fy*fy-R*R,D=Math.sqrt(Math.max(0,b*b-4*a*cc));
       var t1=(-b-D)/(2*a),t2=(-b+D)/(2*a),t=(t1>=0&&t1<=1)?t1:t2;return[A[0]+dx*t,A[1]+dy*t]}
@@ -269,85 +269,61 @@
     return cut(cut(poly,s0,true),s1,false);
   }
 
-  /* 丸い渦格子：右回りと左回りの螺旋が交わる格子の辺を、S字にしならせる。
-     辺はとなりのマスと共有するので、しならせても隙間はできない。マスは2辺がふくらみ2辺が反った、
-     風車のように回る丸いマスになる。仕切りの円で両方の本数が2倍になる。色は右回りの腕ごとに交互 */
-  function whirl(g){
-    var W0=g.edge*1.2,t=1,B=bands6(g,W0),out=[],dl=0.22;
-    B.list.forEach(function(b){
-      var n=b.n,k=n*t/Math.PI,d0=Math.floor(b.s0*k)-1,d1=Math.ceil(b.s1*k)+1;
-      function st(a,bb){return[(bb-a)*Math.PI/(n*t),(a+bb)*Math.PI/n]}
-      var mg=g.edge+TAU*Math.exp(b.s1)/n*2;
-      for(var i=0;i<n;i++)for(var d=d0;d<=d1;d++){
-        var j=i+d,poly=[],q,S=6, c0=st(i+0.5,j+0.5);
-        if(c0[0]<b.s0-0.5||c0[0]>b.s1+0.5) continue;
-        var cp=xy(g,c0[0],c0[1]); if(cp[0]<-mg||cp[0]>g.W+mg||cp[1]<-mg||cp[1]>g.H+mg) continue;
-        for(q=0;q<S;q++){var u=q/S;poly.push(st(i+u,j-dl*Math.sin(Math.PI*u)))}             // b=j の辺（a が i→i+1）
-        for(q=0;q<S;q++){var u2=q/S;poly.push(st(i+1+dl*Math.sin(Math.PI*u2),j+u2))}       // a=i+1 の辺（b が j→j+1）
-        for(q=0;q<S;q++){var u3=q/S;poly.push(st(i+1-u3,j+1-dl*Math.sin(Math.PI*(1-u3))))} // b=j+1 の辺（a が i+1→i）
-        for(q=0;q<S;q++){var u4=q/S;poly.push(st(i+dl*Math.sin(Math.PI*(1-u4)),j+1-u4))}   // a=i の辺（b が j+1→j）
-        poly=clipS(poly,b.s0,b.s1); if(poly.length<3) continue;
-        // 仕切りの円で切った辺は (s,θ) では直線でも画面では弧。細かく打ち直してから写す（隣と弦がずれて隙間ができないように）
-        var pts=[];
-        for(var e=0;e<poly.length;e++){var A=poly[e],Bq=poly[(e+1)%poly.length],onCut=(A[0]===Bq[0]&&(A[0]===b.s0||A[0]===b.s1)),m=onCut?Math.max(1,Math.ceil(Math.abs(Bq[1]-A[1])/0.02)):1;
-          for(var z=0;z<m;z++){var f=z/m;pts.push(xy(g,A[0]+(Bq[0]-A[0])*f,A[1]+(Bq[1]-A[1])*f))}}
-        if(onScreen(g,pts,g.edge)) out.push({p:pts,cls:i&1,dir:((d%5)+5)%5});
+  /* 丸い渦格子（真円の鱗）：丸い渦格子と同じ格子点（右回り・左回りの螺旋の交点。花びらの仕切りで本数2倍）に、
+     真円を1枚ずつ置き、内側の円ほど手前に重ねる（屋根瓦・青海波の重ね方）。
+     タイル＝その円から、手前に重なる円を取り除いた見えている部分。縁はすべて真円の弧になる。
+     半径は、同じ輪の隣の円と接する大きさ（格子の間隔の√2/2 倍）を少し大きくして、重ねたときにすき間が残らないようにする。
+     仕切りの両側では、内と外の帯の円がそのまま重なる（内の帯の円を手前にする）。
+     色は右回りの腕ごとに交互。中心は同心円 */
+  function whirl(g) {
+    var W0 = g.edge * 1.2, t = 1, B = bands6(g, W0), discs = [], out = [];
+    B.list.forEach(function (b, bi) {
+      var n = b.n, u = Math.PI / (n * t), k = 1 / u;
+      // 帯の外へ半歩はみ出す格子点まで円を置く（隣の帯の円と重なって、仕切りにすき間を作らない）
+      var lo = b.s0 - 1.5 * u, hi = b.s1 + (bi === B.list.length - 1 ? 3 : 1.5) * u;
+      var d0 = Math.floor(lo * k) - 1, d1 = Math.ceil(hi * k) + 1;
+      var rho = u * Math.SQRT2 / 2 * Math.SQRT2 * 1.04;          // 対数極座標での半径（斜めの隣までの距離の半分×√2 ×1.04）
+      var mg = g.edge + TAU * Math.exp(hi) / n * 2;
+      for (var i = 0; i < n; i++) for (var d = d0; d <= d1; d++) {
+        var j = i + d, sN = (j - i) * u, th = (i + j) * Math.PI / n;
+        if (sN < lo || sN > hi) continue;
+        var c = xy(g, sN, th), r = Math.exp(sN) * rho;
+        if (c[0] < -mg || c[0] > g.W + mg || c[1] < -mg || c[1] > g.H + mg) continue;
+        discs.push({ c: c, r: r, s: sN, band: bi, cls: i & 1, dir: ((d % 5) + 5) % 5 });
       }
     });
-    // 中心：最初の帯より内側を同心円（円板＋6・12等分の輪）で埋める
-    return out.concat(concentric(g, Math.exp(B.list[0].s0), 3));
-  }
-
-  /* 渦の真円：円の渦（ドイル螺旋に近い円の詰め方）。対数極座標 (s,θ) に正三角形の格子を張り、
-     格子点ごとに真円を置く。格子は p·w1 + q·w2 = (0, 2π) を満たすように傾けるので、
-     右回り p 本・左回り q 本（21 と 34：ひまわりと同じフィボナッチ数）の螺旋に円が並ぶ。
-     等角写像なので円は外へ行くほど相似に大きくなり、仕切りの円は要らない（花びらの仕切りによる継ぎ目が出ない）。
-     半径は、3方向の隣のうち一番近い隣と接する大きさ×0.97（全部の隣とは接しきれないので、わずかにすき間が残る）。
-     円の間の「反った三角」（格子の三角 − 角の3つの円）がもう1種類のタイル。色1＝真円、色2＝すき間。
-     中心は同心円。単元「円と球」の背景を想定 */
-  function bubbles(g) {
-    var P = 21, Q = 34, out = [];
-    var al = Math.atan((2 * P + Q) / (Q * Math.sqrt(3))), L = TAU / (P * Math.sin(al) + Q * Math.sin(al + Math.PI / 3));
-    var w1 = [L * Math.cos(al), L * Math.sin(al)], w2 = [L * Math.cos(al + Math.PI / 3), L * Math.sin(al + Math.PI / 3)];
-    // 円の半径（中心までの距離に対する比）：隣 w へ接する比は |e^w − 1| / (1 + e^{Re w})。3方向で一番小さいもの
-    var ratio = 1e9;
-    [w1, w2, [w2[0] - w1[0], w2[1] - w1[1]]].forEach(function (w) {
-      var ex = Math.exp(w[0]), dx = ex * Math.cos(w[1]) - 1, dy = ex * Math.sin(w[1]);
-      ratio = Math.min(ratio, Math.sqrt(dx * dx + dy * dy) / (1 + ex));
+    // 手前の円を探すための升目（近くの円だけを比べる）
+    var cell = g.edge * 4, grid = {};
+    discs.forEach(function (D, idx) {
+      var gx0 = Math.floor((D.c[0] - D.r) / cell), gx1 = Math.floor((D.c[0] + D.r) / cell),
+          gy0 = Math.floor((D.c[1] - D.r) / cell), gy1 = Math.floor((D.c[1] + D.r) / cell);
+      for (var x = gx0; x <= gx1; x++) for (var y = gy0; y <= gy1; y++) { var key = x + ',' + y; (grid[key] || (grid[key] = [])).push(idx); }
     });
-    ratio *= 0.97;
-    var R0 = g.edge * 4.2, sMin = Math.log(R0), sMax = Math.log(farthest(g) + g.edge * 4);
-    function node(m, k) {
-      var s = m * w1[0] + k * w2[0], th = m * w1[1] + k * w2[1], r = Math.exp(s);
-      return { s: s, c: [g.ox + r * Math.cos(th), g.oy + r * Math.sin(th)], r: r * ratio, th: th };
-    }
-    function near(c, m) { return c[0] > -m && c[0] < g.W + m && c[1] > -m && c[1] < g.H + m; }
-    // 代表の選び方：(m,k) と (m+P, k+Q) は同じ点なので、k を 0..Q−1 に限り、m は s が範囲に入るだけ回す
-    for (var k = 0; k < Q; k++) {
-      var m0 = Math.floor((sMin - 2 * L - k * w2[0]) / w1[0]) - 1, m1 = Math.ceil((sMax - k * w2[0]) / w1[0]) + 1;
-      for (var m = m0; m <= m1; m++) {
-        var A = node(m, k);
-        if (!near(A.c, A.r * 4 + g.edge)) continue;
-        // 真円（中心の円板の外にあるものだけ）
-        if (A.s - L / 2 > sMin) {
-          var cp = [];
-          for (var q = 0; q < 120; q++) { var a0 = TAU * q / 120; cp.push([A.c[0] + A.r * Math.cos(a0), A.c[1] + A.r * Math.sin(a0)]); }
-          if (onScreen(g, cp, g.edge)) out.push({ p: cp, cls: 1, dir: ((m % 5) + 5) % 5 });
-        }
-        // すき間：格子の三角2枚（上向き・下向き）から角の円を取り除く。中心の円板に掛かる分も取り除く
-        [[node(m, k), node(m + 1, k), node(m, k + 1)], [node(m + 1, k), node(m + 1, k + 1), node(m, k + 1)]].forEach(function (T, u) {
-          var pts = [];
-          for (var e = 0; e < 3; e++) {                        // 三角の辺は (s,θ) で直線 → 細かく打って写す（画面では螺旋の弧）
-            var X = T[e], Y = T[(e + 1) % 3], xs = X.s, xt = X.th, ys = Y.s, yt = Y.th, n = 12;
-            for (var z = 0; z < n; z++) { var f = z / n, ss = xs + (ys - xs) * f, tt = xt + (yt - xt) * f, rr = Math.exp(ss); pts.push([g.ox + rr * Math.cos(tt), g.oy + rr * Math.sin(tt)]); }
-          }
-          T.forEach(function (V) { if (pts && V.s - L / 2 > sMin) pts = minusDisk(pts, V.c, V.r); });
-          if (pts) pts = minusDisk(pts, [g.ox, g.oy], R0);
-          if (pts && pts.length > 2 && onScreen(g, pts, g.edge)) out.push({ p: pts, cls: 0, dir: 2 + u });
-        });
-      }
-    }
-    return out.concat(concentric(g, R0, Math.max(3, Math.round(R0 / (g.edge * 1.3)))));
+    var R0 = Math.exp(B.list[0].s0);
+    discs.forEach(function (D, idx) {
+      if (D.c[0] + D.r < 0 || D.c[0] - D.r > g.W || D.c[1] + D.r < 0 || D.c[1] - D.r > g.H) return;   // 画面に掛からない円は点を打つ前に捨てる
+      var pts = [], q, NQ = 120;
+      for (q = 0; q < NQ; q++) { var a0 = TAU * q / NQ; pts.push([D.c[0] + D.r * Math.cos(a0), D.c[1] + D.r * Math.sin(a0)]); }
+      var seen = {}, gx0 = Math.floor((D.c[0] - D.r) / cell), gx1 = Math.floor((D.c[0] + D.r) / cell),
+          gy0 = Math.floor((D.c[1] - D.r) / cell), gy1 = Math.floor((D.c[1] + D.r) / cell);
+      // 手前＝内側の帯の円、同じ帯なら中心に近い円（s が小さい）、同じ距離なら番号の小さい方。
+      // 帯を先に比べるのは、仕切りの近くで外の帯の小さな円が内の帯の大きな円の中にすっぽり入るとき、
+      // 小さい方を手前にすると大きい方に穴が空く（穴のあるタイルは作れない）ため。小さい方を奥にすれば、隠れて消えるだけで済む
+      var front = [];
+      for (var x = gx0; x <= gx1; x++) for (var y = gy0; y <= gy1; y++) (grid[x + ',' + y] || []).forEach(function (o) {
+        if (seen[o] || o === idx) return; seen[o] = 1;
+        var E = discs[o];
+        if (E.band > D.band) return;
+        if (E.band === D.band && (E.s > D.s + 1e-9 || (Math.abs(E.s - D.s) < 1e-9 && o > idx))) return;
+        if (Math.hypot(E.c[0] - D.c[0], E.c[1] - D.c[1]) >= E.r + D.r) return;
+        front.push(E);
+      });
+      front.sort(function (A, Bq) { return Math.hypot(A.c[0] - D.c[0], A.c[1] - D.c[1]) - Math.hypot(Bq.c[0] - D.c[0], Bq.c[1] - D.c[1]); });
+      for (var f = 0; f < front.length && pts; f++) pts = minusDisk(pts, front[f].c, front[f].r);
+      if (pts) pts = minusDisk(pts, [g.ox, g.oy], R0);
+      if (pts && pts.length > 2 && onScreen(g, pts, 0)) out.push({ p: pts, cls: D.cls, dir: D.dir });
+    });
+    return out.concat(concentric(g, R0, 3));
   }
 
   var GENERATORS = {
@@ -356,10 +332,9 @@
     heptagon:  { name: '七角（7回対称）',       make: multigrid(7) },
     dodecagon: { name: '十二角（12回対称）',    make: multigrid(6) },
     sunflower: { name: 'ひまわり（葉序）',      make: sunflower },
-    whirl:     { name: '丸い渦格子（6回対称）', make: whirl },
+    whirl:     { name: '丸い渦格子（6回対称・真円の鱗）', make: whirl },
     flower:    { name: '生命の花（6回対称）',   make: flower },
-    mandala:   { name: '円弧の曼荼羅（4回対称）', make: mandala },
-    bubbles:   { name: '渦の真円（21・34の螺旋）', make: bubbles }
+    mandala:   { name: '円弧の曼荼羅（4回対称）', make: mandala }
   };
 
   var api = { GENERATORS: GENERATORS, multigrid: multigrid };
