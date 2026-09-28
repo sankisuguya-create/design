@@ -37,7 +37,7 @@ function coverage(tiles, g) {
   });
   let n = 0, gap = 0, over = 0;
   for (let x = 3.3; x < g.W; x += 7.1) for (let y = 2.9; y < g.H; y += 7.3) {
-    const hits = (grid.get(Math.floor(x / cell) + ',' + Math.floor(y / cell)) || []).filter(i => inside([x, y], tiles[i].p)).length;
+    const hits = (grid.get(Math.floor(x / cell) + ',' + Math.floor(y / cell)) || []).filter(i => inside([x, y], tiles[i].p) && !(tiles[i].h && inside([x, y], tiles[i].h))).length;   // h は穴
     n++; if (hits === 0) gap++; if (hits > 1) over++;
   }
   return { gap: gap / n, over: over / n };
@@ -54,10 +54,12 @@ names.forEach(name => {
     const t0 = process.hrtime.bigint();
     const raw = G.make(g);
     const ms = Number(process.hrtime.bigint() - t0) / 1e6;
-    // 共通エンジンと同じく、中心が画面の外にあるタイルは捨ててから数える
+    // 共通エンジンと同じく、画面に掛からないタイルは捨ててから数える（外接する四角が画面と重なるかで見る。
+    // 中心の位置で捨てると、渦の真円の外側の大きな円のように、中心は画面の外でも一部が画面に掛かるタイルが抜けて穴になる）
     const tiles = raw.filter(t => {
-      const cx = t.p.reduce((a, p) => a + p[0], 0) / t.p.length, cy = t.p.reduce((a, p) => a + p[1], 0) / t.p.length;
-      return cx >= -g.edge && cx <= g.W + g.edge && cy >= -g.edge && cy <= g.H + g.edge;
+      let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+      t.p.forEach(p => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); });
+      return x1 > 0 && x0 < g.W && y1 > 0 && y0 < g.H;
     });
     const c1 = tiles.filter(t => t.cls === 1).length, share = Math.min(c1, tiles.length - c1) / tiles.length;
     const cov = coverage(tiles, g);
