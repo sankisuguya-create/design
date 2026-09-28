@@ -37,7 +37,7 @@ function coverage(tiles, g) {
   });
   let n = 0, gap = 0, over = 0;
   for (let x = 3.3; x < g.W; x += 7.1) for (let y = 2.9; y < g.H; y += 7.3) {
-    const hits = (grid.get(Math.floor(x / cell) + ',' + Math.floor(y / cell)) || []).filter(i => inside([x, y], tiles[i].p)).length;
+    const hits = (grid.get(Math.floor(x / cell) + ',' + Math.floor(y / cell)) || []).filter(i => inside([x, y], tiles[i].p) && !(tiles[i].h && inside([x, y], tiles[i].h))).length;   // h は穴
     n++; if (hits === 0) gap++; if (hits > 1) over++;
   }
   return { gap: gap / n, over: over / n };
