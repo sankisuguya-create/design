@@ -417,29 +417,7 @@
   }
 
 
-  /* 十分目盛りの輪（小数の背景の案）：同心円の輪を、内側は10等分、外側は100等分する（0.1 と 0.01）。
-     輪の幅は外ほど広げ、1区画の形（半径方向の長さ÷円周方向の幅＝0.5。横長の目盛りの形）を揃える。
-     色は「10区画ごとのまとまり」と輪の偶奇で交互に塗る。100等分の輪では、10区画ずつの帯が0.1の目盛りのように並ぶ */
-  function dial(g) {
-    var out = [], ASP = 0.5, far = farthest(g) + g.edge * 2, R0 = g.edge * 1.6, r = R0, ring = 0;
-    out.push({ p: (function () { var p = []; for (var q = 0; q < 60; q++) { var a0 = TAU * q / 60; p.push([g.ox + R0 * Math.cos(a0), g.oy + R0 * Math.sin(a0)]); } return p; })(), cls: 1, dir: 0 });
-    while (r < far) {
-      var n = (2 * Math.PI * r / 100 < g.edge * 0.45) ? 10 : 100;      // 100等分が細すぎる内側は10等分
-      var r2 = r * (1 + TAU * ASP / n), st = Math.max(2, Math.ceil(TAU / n / 0.05));
-      for (var i = 0; i < n; i++) {
-        var t0 = TAU * i / n - Math.PI / 2, t1 = TAU * (i + 1) / n - Math.PI / 2, pts = [], q;
-        for (q = 0; q <= st; q++) { var a1 = t0 + (t1 - t0) * q / st; pts.push([g.ox + r2 * Math.cos(a1), g.oy + r2 * Math.sin(a1)]); }
-        for (q = st; q >= 0; q--) { var a2 = t0 + (t1 - t0) * q / st; pts.push([g.ox + r * Math.cos(a2), g.oy + r * Math.sin(a2)]); }
-        if (!onScreen(g, pts, 0)) continue;
-        var grp = n === 100 ? Math.floor(i / 10) : i;
-        out.push({ p: pts, cls: (grp + ring) & 1, dir: (i % 10) % 5 });
-      }
-      r = r2; ring++;
-    }
-    return out;
-  }
-
-  /* 巻き尺の渦（長さの背景の案）：一定の幅の帯がアルキメデスの渦（r = a + bθ）を巻く。帯の幅は1周で広がる長さ 2πb と同じなので、
+  /* 巻き尺の渦（長さのたんいの背景）：一定の幅の帯がアルキメデスの渦（r = a + bθ）を巻く。帯の幅は1周で広がる長さ 2πb と同じなので、
      となりの周の帯とすき間なく接する（巻いた巻き尺）。帯を1目盛りずつ同じ長さに区切り、10目盛りごとに色を替える。
      1周の長さは10目盛りの倍数にならないので、色の帯が周ごとに少しずつずれ、別の渦が浮かんで見える */
   function tape(g) {
@@ -478,7 +456,6 @@
     mandala:   { name: '円弧の曼荼羅（4回対称）', make: mandala },
     decagon:   { name: '十角の星（10回対称）',   make: multigrid(5, 0.5) },
     petals:    { name: '渦の花びら（6回対称）',  make: petals },
-    dial:      { name: '十分目盛りの輪',         make: dial },
     tape:      { name: '巻き尺の渦',             make: tape }
   };
 
