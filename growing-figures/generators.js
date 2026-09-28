@@ -82,10 +82,10 @@
      色1＝角が広い菱形（最小角が55°より大きい）、色2＝細い菱形。
      格子のずれ GAM を全部同じにすると3本以上の線が1点で交わり、重なりや隙間が出る。
      わずかにずらしてある（0.2 + 0.0137×j） */
-  function multigrid(N) {
+  function multigrid(N, gam) {
     return function (g) {
       var E = [], GAM = [], j, step = (N % 2) ? 2 * Math.PI / N : Math.PI / N;
-      for (j = 0; j < N; j++) { E.push([Math.cos(j * step), Math.sin(j * step)]); GAM.push(0.2 + 0.0137 * j); }
+      for (j = 0; j < N; j++) { E.push([Math.cos(j * step), Math.sin(j * step)]); GAM.push(gam === undefined ? 0.2 + 0.0137 * j : gam); }
       var s = g.edge, R = farthest(g) + g.edge * 2, K = Math.ceil(2 * R / (N * s) * 1.15) + 2, out = [];
       for (var r = 0; r < N; r++) for (var q = r + 1; q < N; q++) {
         var er = E[r], eq = E[q], det = er[0] * eq[1] - er[1] * eq[0];
@@ -376,6 +376,96 @@
     return out.concat(rings(g, R0, 5));
   }
 
+  /* 渦の花びら（6回対称・螺旋）：螺旋の腕を、外へふくらむ弧で切った一画一画。一画は上が丸く、下が前の一画の丸みを受けて反る
+     （花びら・鱗の形）。境目の丸みは「その境目の下の帯の腕の幅」で1つずつふくらむので、
+     仕切りで腕が2本に分かれても、境目は上下の一画で同じ曲線になり、隙間ができない。色は腕ごとに交互 */
+  function petals(g){
+    var W0=g.edge*0.85,K=1.3,t=0.8,B=bands6(g,W0),out=[],rows=[];
+    // 境目の列を作る：{s, n（ふくらみの幅を決める腕の本数）, h（ふくらみの高さ）}
+    B.list.forEach(function(b){
+      var m=Math.max(1,Math.round((b.s1-b.s0)*(1+t*t)*b.n/(TAU*K)));
+      for(var k=0;k<m;k++) rows.push({s0:b.s0+(b.s1-b.s0)*k/m, s1:b.s0+(b.s1-b.s0)*(k+1)/m, n:b.n});
+    });
+    var bd=rows.map(function(r,k){return {s:r.s0,n:k?rows[k-1].n:r.n/2,h:(r.s1-r.s0)*0.42}});
+    bd.push({s:rows[rows.length-1].s1,n:rows[rows.length-1].n,h:0});
+    function sOn(k,v,n){var b=bd[k];return b.s+b.h*Math.abs(Math.sin(Math.PI*v*b.n/n))}
+    function P(v,s,n){return xy(g,s,TAU*v/n+t*s)}
+    // 中心の花：6の倍数枚の花びら。外の縁は最初の境目の丸み
+    var n0=bd[0].n;
+    for(var i=0;i<n0;i++){
+      var pts=[[g.ox,g.oy]];
+      for(var q=0;q<=8;q++){var v=i+q/8;pts.push(P(v,sOn(0,v,n0),n0))}
+      out.push({p:pts,cls:1-(i&1),dir:i%5});
+    }
+    // 画面の外の一画は、点を打つ前に中心の位置だけで捨てる（外側の帯は腕の本数が多く、大半が画面の外）
+    function near(p,m){return p[0]>-m&&p[0]<g.W+m&&p[1]>-m&&p[1]<g.H+m}
+    rows.forEach(function(r,k){
+      var mg=g.edge+TAU*Math.exp(r.s1)/r.n*2;
+      for(var i=0;i<r.n;i++){
+        if(!near(P(i+0.5,(r.s0+r.s1)/2,r.n),mg)) continue;
+        var pts=[],q,S=16;
+        for(q=0;q<=S;q++){var v=i+q/S;pts.push(P(v,sOn(k,v,r.n),r.n))}                  // 下の境目（反り）
+        var sA=sOn(k,i+1,r.n),sB=sOn(k+1,i+1,r.n);
+        for(q=1;q<4;q++) pts.push(P(i+1,sA+(sB-sA)*q/4,r.n));                                 // 右の腕
+        for(q=S;q>=0;q--){var v2=i+q/S;pts.push(P(v2,sOn(k+1,v2,r.n),r.n))}               // 上の境目（丸み）
+        var sC=sOn(k+1,i,r.n),sD=sOn(k,i,r.n);
+        for(q=1;q<4;q++) pts.push(P(i,sC+(sD-sC)*q/4,r.n));                                   // 左の腕
+        if(onScreen(g,pts,g.edge)) out.push({p:pts,cls:i&1,dir:(i+k)%5});
+      }
+    });
+    return out;
+  }
+
+
+  /* 十分目盛りの輪（小数の背景の案）：同心円の輪を、内側は10等分、外側は100等分する（0.1 と 0.01）。
+     輪の幅は外ほど広げ、1区画の形（半径方向の長さ÷円周方向の幅＝0.5。横長の目盛りの形）を揃える。
+     色は「10区画ごとのまとまり」と輪の偶奇で交互に塗る。100等分の輪では、10区画ずつの帯が0.1の目盛りのように並ぶ */
+  function dial(g) {
+    var out = [], ASP = 0.5, far = farthest(g) + g.edge * 2, R0 = g.edge * 1.6, r = R0, ring = 0;
+    out.push({ p: (function () { var p = []; for (var q = 0; q < 60; q++) { var a0 = TAU * q / 60; p.push([g.ox + R0 * Math.cos(a0), g.oy + R0 * Math.sin(a0)]); } return p; })(), cls: 1, dir: 0 });
+    while (r < far) {
+      var n = (2 * Math.PI * r / 100 < g.edge * 0.45) ? 10 : 100;      // 100等分が細すぎる内側は10等分
+      var r2 = r * (1 + TAU * ASP / n), st = Math.max(2, Math.ceil(TAU / n / 0.05));
+      for (var i = 0; i < n; i++) {
+        var t0 = TAU * i / n - Math.PI / 2, t1 = TAU * (i + 1) / n - Math.PI / 2, pts = [], q;
+        for (q = 0; q <= st; q++) { var a1 = t0 + (t1 - t0) * q / st; pts.push([g.ox + r2 * Math.cos(a1), g.oy + r2 * Math.sin(a1)]); }
+        for (q = st; q >= 0; q--) { var a2 = t0 + (t1 - t0) * q / st; pts.push([g.ox + r * Math.cos(a2), g.oy + r * Math.sin(a2)]); }
+        if (!onScreen(g, pts, 0)) continue;
+        var grp = n === 100 ? Math.floor(i / 10) : i;
+        out.push({ p: pts, cls: (grp + ring) & 1, dir: (i % 10) % 5 });
+      }
+      r = r2; ring++;
+    }
+    return out;
+  }
+
+  /* 巻き尺の渦（長さの背景の案）：一定の幅の帯がアルキメデスの渦（r = a + bθ）を巻く。帯の幅は1周で広がる長さ 2πb と同じなので、
+     となりの周の帯とすき間なく接する（巻いた巻き尺）。帯を1目盛りずつ同じ長さに区切り、10目盛りごとに色を替える。
+     1周の長さは10目盛りの倍数にならないので、色の帯が周ごとに少しずつずれ、別の渦が浮かんで見える */
+  function tape(g) {
+    var W = g.edge * 1.35, b = W / TAU, a = g.edge * 1.2, L = g.edge * 1.05, far = farthest(g) + W * 2, out = [];
+    var thMax = (far - a) / b, th = 0, idx = 0, cur = 0;
+    // 帯の中心線（r = a + bθ + W/2）の長さで区切る。区切りの角度を細かい刻みで積算して求める
+    var cuts = [0];
+    for (var tt = 0; tt < thMax; tt += 0.004) {
+      var rc = a + b * tt + W / 2; cur += rc * 0.004;
+      if (cur >= L) { cuts.push(tt); cur -= L; }
+    }
+    function P(t, off) { var rr = a + b * t + off; return [g.ox + rr * Math.cos(t), g.oy + rr * Math.sin(t)]; }
+    for (var k = 0; k + 1 < cuts.length; k++) {
+      var t0 = cuts[k], t1 = cuts[k + 1], pts = [], st = Math.max(2, Math.ceil((t1 - t0) / 0.04)), q;
+      for (q = 0; q <= st; q++) pts.push(P(t0 + (t1 - t0) * q / st, W));     // 外の縁
+      for (q = st; q >= 0; q--) pts.push(P(t0 + (t1 - t0) * q / st, 0));     // 内の縁
+      if (!onScreen(g, pts, 0)) continue;
+      out.push({ p: pts, cls: Math.floor(k / 10) & 1, dir: k % 5 });
+    }
+    // 中心：渦の始まりまでを埋める（半径 a の円板と、最初の1周の内側のすき間）
+    var hub = [];
+    for (q = 0; q <= 120; q++) { var t2 = TAU * q / 120; hub.push(P(t2, 0)); }
+    out.push({ p: hub, cls: 1, dir: 0 });
+    return out;
+  }
+
   var GENERATORS = {
     penrose:   { name: 'ペンローズ（5回対称）', make: penrose },
     octagon:   { name: '八角の星（8回対称）',   make: multigrid(4) },
@@ -385,7 +475,11 @@
     // 丸い渦格子は内向き（鱗の丸みが中心を向く）を採用。外向きは whirl(g, false) で出せる（SPEC.md「見送った図形」）
     whirl:     { name: '丸い渦格子（6回対称・真円の鱗）', make: function (g) { return whirl(g, true); } },
     flower:    { name: '生命の花（6回対称）',   make: flower },
-    mandala:   { name: '円弧の曼荼羅（4回対称）', make: mandala }
+    mandala:   { name: '円弧の曼荼羅（4回対称）', make: mandala },
+    decagon:   { name: '十角の星（10回対称）',   make: multigrid(5, 0.5) },
+    petals:    { name: '渦の花びら（6回対称）',  make: petals },
+    dial:      { name: '十分目盛りの輪',         make: dial },
+    tape:      { name: '巻き尺の渦',             make: tape }
   };
 
   var api = { GENERATORS: GENERATORS, multigrid: multigrid };
