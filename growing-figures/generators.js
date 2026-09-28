@@ -382,8 +382,8 @@
     heptagon:  { name: '七角（7回対称）',       make: multigrid(7) },
     dodecagon: { name: '十二角（12回対称）',    make: multigrid(6) },
     sunflower: { name: 'ひまわり（葉序）',      make: sunflower },
-    whirl:     { name: '丸い渦格子（真円の鱗・外向き）', make: function (g) { return whirl(g, false); } },
-    whirlIn:   { name: '丸い渦格子（真円の鱗・内向き）', make: function (g) { return whirl(g, true); } },
+    // 丸い渦格子は内向き（鱗の丸みが中心を向く）を採用。外向きは whirl(g, false) で出せる（SPEC.md「見送った図形」）
+    whirl:     { name: '丸い渦格子（6回対称・真円の鱗）', make: function (g) { return whirl(g, true); } },
     flower:    { name: '生命の花（6回対称）',   make: flower },
     mandala:   { name: '円弧の曼荼羅（4回対称）', make: mandala }
   };
