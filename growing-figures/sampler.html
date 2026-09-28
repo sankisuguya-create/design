@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>成長する図形の見本帳</title>
+<style>
+:root{
+  color-scheme:light;
+  --paper:#F7F7F4; --ink:#101728; --acc:#35D0A5; --q:#F1B1E4;
+  --mute:#9AA0B0; --line:#DFDFD8;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{background:var(--paper);color:var(--ink);
+  font-family:system-ui,-apple-system,"Noto Sans JP","Hiragino Sans",sans-serif;
+  font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;user-select:none}
+#floor,#grow{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#start{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:1.4rem;padding:1.3rem 16px 5.5rem}
+.apptitle{font-size:clamp(1.3rem,4.5vw,1.9rem);font-weight:800;letter-spacing:.02em}
+.timelede{font-size:clamp(1.5rem,5.5vw,2.3rem);font-weight:800;color:var(--acc);margin-top:-.6rem}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem;width:min(760px,100%)}
+.card{background:#fff;border:1.5px solid var(--line);border-radius:14px;
+  padding:.85rem 1.1rem;display:block;transition:border-color .12s;cursor:pointer;text-align:left;font:inherit;color:inherit}
+.card:hover,.card:focus-visible{border-color:var(--ink);outline:none}
+.card .top{display:flex;align-items:center;gap:.75rem}
+.card .k{font-size:1.05rem;font-weight:800;color:#fff;background:var(--ink);
+  width:1.9rem;height:1.9rem;border-radius:7px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.card .t{font-size:1.18rem;font-weight:800;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .bot{display:flex;align-items:flex-end;gap:.5rem;margin-top:.35rem;padding-left:2.65rem;min-height:1.6rem}
+.card .medal{font-size:1.25rem;line-height:1.2}
+.card .star{font-size:.9rem;font-weight:800;color:var(--acc);line-height:1.4;white-space:nowrap}
+.card .hsbox{margin-left:auto;display:flex;align-items:baseline;gap:.35rem}
+.card .hs{font-size:1.7rem;font-weight:800;line-height:1}
+.card .hs.none{color:var(--line)}
+.card .hslbl{white-space:nowrap;font-size:.58rem;color:var(--mute);letter-spacing:.08em;font-weight:700}
+.hint{font-size:.88rem;color:var(--mute);font-weight:600}
+.prow{width:min(620px,100%);border-top:1.5px dashed var(--line);padding-top:1.1rem;
+  display:flex;justify-content:center;gap:1.2rem;flex-wrap:wrap}
+.pbtn{display:flex;align-items:center;gap:.7rem;background:none;border:none;
+  cursor:pointer;font:inherit;color:var(--ink);padding:.3rem .6rem;border-radius:10px}
+.pbtn .k{font-size:.92rem;font-weight:800;color:var(--mute);background:#E7E7E1;
+  width:1.7rem;height:1.7rem;border-radius:6px;display:flex;align-items:center;justify-content:center}
+.pbtn .t{font-size:1rem;font-weight:800}
+.pbtn .s{font-size:.72rem;color:var(--mute);font-weight:600}
+@media (max-width:520px){
+  #start{gap:1rem}
+  .card{padding:.7rem .8rem}.card .t{font-size:1rem}.card .bot{padding-left:0}
+  .card .hs{font-size:1.4rem}.card .hslbl{white-space:normal}
+}
+/* プレビュー専用の操作。本番の画面には出ない */
+#sim{position:fixed;left:0;right:0;bottom:0;z-index:5;
+  padding:.55rem 16px calc(.55rem + env(safe-area-inset-bottom,0px));
+  background:#101728;color:#fff;display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .8rem;font-size:.8rem}
+#sim .lab{color:#9AA0B0;font-weight:700;letter-spacing:.06em}
+#sim .tc{font-weight:800;font-size:1rem;min-width:6.5em}
+#sim button{font:inherit;font-weight:700;border:0;border-radius:8px;padding:.5rem .8rem;
+  background:#2A3350;color:#fff;cursor:pointer;touch-action:manipulation}
+#sim select{font:inherit;font-weight:700;border:0;border-radius:8px;padding:.45rem .5rem;background:#2A3350;color:#fff}
+#sim button.main{background:var(--acc);color:#101728}
+#sim button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+#sim .note{flex-basis:100%;color:#9AA0B0;font-size:.72rem;line-height:1.4}
+@media (min-width:900px){#sim .note{flex-basis:auto;margin-left:auto}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<canvas id="floor" aria-hidden="true"></canvas>
+<canvas id="grow" aria-hidden="true"></canvas>
+
+<section id="start">
+  <div class="apptitle">九九表タイムアタック！</div>
+  <div class="timelede">1回 60びょう</div>
+  <div class="grid" id="modeGrid"></div>
+  <div class="hint" id="startHint">1〜4 のキーで はじまります</div>
+  <div class="prow">
+    <button class="pbtn" type="button"><span class="k">0</span>
+      <span><span class="t">れんしゅう</span> <span class="s">きろくしません</span></span></button>
+    <button class="pbtn" type="button"><span class="k">9</span>
+      <span><span class="t">すうじキーせってい</span> <span class="s">テンキー</span></span></button>
+  </div>
+</section>
+
+<div id="sim" role="group" aria-label="見本帳の操作">
+  <label class="lab" for="pat">図形</label><select id="pat"></select>
+  <label class="lab" for="c2">色2</label><select id="c2"></select>
+  <label class="lab" for="pace">サイトの速さ</label><select id="pace">
+    <option value="30">1分30問（九九など）</option><option value="25" selected>1分25問</option>
+    <option value="15">1分15問</option><option value="8">1分8問（単位換算など）</option></select>
+  <span class="tc" id="tcOut"></span>
+  <span class="lab" id="stageOut"></span>
+  <button class="main" id="play1" type="button">1回あそぶ</button>
+  <button id="play10" type="button">10回</button>
+  <button id="play50" type="button">50回</button>
+  <button id="reset" type="button">0にもどす</button>
+  <span class="note" id="info"></span>
+</div>
+
+<script src="generators.js"></script>
+<script>
+(function(){
+var $=function(id){return document.getElementById(id)};
+var MODES={1:'かけ算 9×9',2:'かけ算 9×16',3:'わり算 9×9',4:'わり算 9×16'};
+var BEST={1:18,2:12,3:9,4:0}, MEDAL={1:'🥈',2:'',3:'',4:''}, STARS={1:7,2:3,3:1,4:0};
+
+/* ---- 成長の規則（試案） ----
+   床は3つの層で育つ。どの層も「育ち始める点」から外へ広がり、画面全体を覆い終えたら次の層へ進む。
+     無地 → ① 輪郭線 → ② 太い菱形を第一系統（学年の色）で塗る → ③ 細い菱形を第二系統で塗る
+   標準の分数×PER_MIN 枚ぶん進む。タイルは必ず1枚まるごと描く（半分だけのタイルは作らない）。 */
+/* 育ちやすさ：正答ではなく「標準の分数」で育てる（SPEC.md「育ちやすさ」）。
+   標準の分数 ＝ 正答 ÷ そのサイトの1分あたり平均正答。床の枚数 ＝ 標準の分数 × PER_MIN。
+   見本帳では「サイトの速さ」を選べる。速さを変えても、1回（1分）で育つ量はほぼ同じになる */
+var PER_MIN=18, PACE=25;
+var TC=0, MIN=160, prog=null;
+
+function renderMenu(){
+  $('modeGrid').innerHTML=[1,2,3,4].map(function(m,i){
+    var hs=BEST[m];
+    return '<button type="button" class="card" data-mode="'+m+'"><div class="top"><div class="k">'+(i+1)+'</div>'+
+      '<div class="t">'+MODES[m]+'</div></div><div class="bot"><div class="medal">'+(MEDAL[m]||'')+'</div>'+
+      (STARS[m]?'<div class="star">★'+STARS[m]+'</div>':'')+
+      '<div class="hsbox"><div class="hs'+(hs?'':' none')+'">'+(hs||'—')+'</div><div class="hslbl">60びょう ベスト</div></div></div></button>';
+  }).join('');
+}
+
+/* ---- 色 ----
+   第一系統＝学年の色（3年はミント）、第二系統＝その学年で併用してよい別学年の色（Core.gs の GRADE_EXTRA_ から。3年はすみれ）。
+   同じ系統の中で、菱形の向き（5方向）ごとに色みと明るさを少しずつ変え、宝石の切子面のように見せる */
+/* 色1＝学年の色、色2＝サイトの色（COLORS.md の台帳）。どちらも向き5段の明暗を持つ「系統」にする */
+var GRADE={1:'#F1B1E4',2:'#49B9DF',3:'#35D0A5',4:'#8A6CE5',5:'#D4D454',6:'#E4B195'};
+var GEMS={amethyst:'#8A6CE5',sapphire:'#3D6FD6',topaz:'#E0A43A',peridot:'#8DC63F',aquamarine:'#49B9DF',rose:'#E27DB0',garnet:'#B5476B',citrine:'#D4C04A'};
+function fam(hex){var m=/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex),c=[parseInt(m[1],16),parseInt(m[2],16),parseInt(m[3],16)];
+  return [0,-0.1,0.14,-0.18,0.24].map(function(k){return c.map(function(v){return Math.round(k>=0?v+(255-v)*k:v*(1+k))}).join(',')})}
+var C1='#35D0A5', C2='amethyst', FAM1=fam(C1), FAM2=fam(GEMS[C2]);
+var A1=0.30, A2=0.26;
+
+/* 生成器は generators.js（このファイルと同じ場所）にある。見本帳はそれを読むだけで、図形の定義を持たない */
+var GENS=GrowingFigures.GENERATORS, PATTERN_ORDER=Object.keys(GENS), PAT=PATTERN_ORDER[0];
+
+/* ---- 共通エンジン：生成器の結果を並べ替え、色を割り当てる ---- */
+var tiles=[], THICK=[], THIN=[], W=0, H=0, DPR=1, EDGE=24, OX=0, OY=0, GEN_MS=0;
+function gen(){
+  W=innerWidth; H=innerHeight; DPR=Math.min(devicePixelRatio||1,2);
+  EDGE=Math.max(15,Math.min(28,Math.sqrt(W*H)/40));
+  // 育ち始める点。カードに隠れない左下寄りに置く（中央の花がカードの陰にならないように）
+  OX=W*(W<600?0.5:0.14); OY=H*(W<600?0.06:0.78);
+  var t0=performance.now();
+  var raw=GENS[PAT].make({W:W,H:H,ox:OX,oy:OY,edge:EDGE,margin:EDGE*2});
+  tiles=[];
+  for(var i=0;i<raw.length;i++){
+    var t=raw[i],p=t.p,cx=0,cy=0;
+    for(var j=0;j<p.length;j++){cx+=p[j][0];cy+=p[j][1]}
+    cx/=p.length; cy/=p.length;
+    if(cx<-EDGE||cx>W+EDGE||cy<-EDGE||cy>H+EDGE) continue;       // 画面に掛からないタイルは持たない
+    tiles.push({p:p,thick:t.cls===1,rgb:(t.cls===1?FAM1:FAM2)[t.dir],d:Math.sqrt((cx-OX)*(cx-OX)+(cy-OY)*(cy-OY)),cx:cx,cy:cy,m:1});
+  }
+  tiles.sort(function(p,q){return p.d-q.d});
+  THICK=tiles.filter(function(t){return t.thick}); THIN=tiles.filter(function(t){return !t.thick});
+  GEN_MS=performance.now()-t0;
+  [$('floor'),$('grow')].forEach(function(cv){cv.width=W*DPR;cv.height=H*DPR});
+}
+
+/* タイトル・カード・ボタンの周りでは模様を薄める。
+   各菱形の「文字やボタンまでの距離」を配置が決まった時に1回だけ計算し、濃さの係数 m として持つ */
+var FADE=10, MIN_K=0.1;
+function calcMask(){
+  var rs=[].map.call(document.querySelectorAll('.apptitle,.timelede,#modeGrid,.hint,.pbtn'),function(e){
+    var r=e.getBoundingClientRect(); return [r.left-2,r.top-2,r.right+2,r.bottom+2];
+  });
+  for(var i=0;i<tiles.length;i++){
+    var t=tiles[i], x=t.cx, y=t.cy, d=1e9;
+    for(var j=0;j<rs.length;j++){
+      var r=rs[j], dx=Math.max(r[0]-x,0,x-r[2]), dy=Math.max(r[1]-y,0,y-r[3]);
+      var dd=dx*dx+dy*dy; if(dd<d) d=dd;
+    }
+    var k=Math.min(1,Math.sqrt(d)/FADE); t.m=MIN_K+(1-MIN_K)*k*k*(3-2*k);
+  }
+}
+
+/* 累計正答から、3つの層それぞれの進み具合（何枚目まで描くか）を出す */
+function progress(){
+  var u=Math.floor(MIN*PER_MIN), N=tiles.length, K=THICK.length;
+  return {line:Math.min(u,N), thick:Math.max(0,Math.min(u-N,K)), thin:Math.max(0,Math.min(u-N-K,THIN.length))};
+}
+function stageName(g){
+  if(!tiles.length) return '';
+  if(g.thin>=THIN.length) return 'ぜんぶ そろった';
+  if(g.thick>=THICK.length) return '③ 第二の色';
+  if(g.line>=tiles.length) return '② 学年の色';
+  return g.line?'① 輪郭':'無地';
+}
+function poly(P,t){var p=t.p;P.moveTo(p[0][0],p[0][1]);for(var i=1;i<p.length;i++)P.lineTo(p[i][0],p[i][1]);P.closePath()}
+
+/* 描画はまとめて行う。菱形1枚ごとに色を設定して塗ると、低速な端末ではその切り替えが重さの大半になる。
+   濃さを40段階に丸め、同じ色・同じ濃さの菱形を1本のパスに集めてから、まとめて1回で塗る */
+var Q=40, LINE='16,23,40', LA=0.18;
+function Bucket(){this.m={}}
+Bucket.prototype.add=function(key,t){var P=this.m[key]||(this.m[key]=new Path2D());poly(P,t)};
+function flushFill(ctx,bk){for(var k in bk.m){var s=k.split('|');ctx.fillStyle='rgba('+s[0]+','+(s[1]/Q)+')';ctx.fill(bk.m[k])}}
+function flushStroke(ctx,bk,w){ctx.lineWidth=w;for(var k in bk.m){var s=k.split('|');ctx.strokeStyle='rgba('+s[0]+','+(s[1]/Q)+')';ctx.stroke(bk.m[k])}}
+function q(a){return Math.max(1,Math.round(a*Q))}
+function fillKey(t){return t.rgb+'|'+q((t.thick?A1:A2)*t.m)}
+function lineKey(t){return LINE+'|'+q(LA*t.m)}
+
+/* 土台：その時点の3層をまとめて描く。状態が変わった時だけ描く */
+function drawFloor(g){
+  var ctx=$('floor').getContext('2d');
+  ctx.setTransform(DPR,0,0,DPR,0,0); ctx.clearRect(0,0,W,H); ctx.lineJoin='round';
+  var fills=new Bucket(), lines=new Bucket(), hints=new Bucket(), i;
+  for(i=0;i<g.thick;i++) fills.add(fillKey(THICK[i]),THICK[i]);
+  for(i=0;i<g.thin;i++)  fills.add(fillKey(THIN[i]),THIN[i]);
+  for(i=0;i<g.line;i++)  lines.add(lineKey(tiles[i]),tiles[i]);
+  // ①の途中だけ、輪郭の先にうっすら次の輪郭をにじませる（この先にまだ何かある予告）
+  if(g.line && g.line<tiles.length){
+    var front=tiles[g.line-1].d, band=EDGE*6;
+    for(i=g.line;i<tiles.length;i++){
+      var t=tiles[i], f=1-(t.d-front)/band; if(f<=0) break;
+      hints.add(LINE+'|'+q(0.12*f*f*t.m),t);
+    }
+  }
+  flushFill(ctx,fills); flushStroke(ctx,lines,1); flushStroke(ctx,hints,.8);
+}
+
+/* 成長の演出。増えた分だけを上の層に、内側から順に1枚ずつまるごと描き足す。
+   1回で層の境目をまたいだ時は、①→②→③の順に続けて見せる。
+   各フレームで描くのは「そのフレームで順番が来た菱形」だけで、描いたものは消さずに積み重ねる。
+   終わったら土台に焼き付けて上の層を消す */
+var anim=0, done=0;
+function grow(g0,g1){
+  cancelAnimationFrame(anim); clearTimeout(done);
+  var cv=$('grow'), ctx=cv.getContext('2d');
+  ctx.setTransform(DPR,0,0,DPR,0,0); ctx.clearRect(0,0,W,H); ctx.lineJoin='round';
+  var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var steps=[
+    {list:tiles.slice(g0.line,g1.line),   fill:false},
+    {list:THICK.slice(g0.thick,g1.thick), fill:true},
+    {list:THIN.slice(g0.thin,g1.thin),    fill:true}
+  ].filter(function(s){return s.list.length});
+  if(reduce||!steps.length){drawFloor(g1);return}
+  drawFloor(g0);
+  var DUR=1100, GAP=250, at=0;
+  steps.forEach(function(s){s.start=at; s.i=0; at+=DUR+GAP});
+  var t0=performance.now(), END=at-GAP;
+  (function frame(now){
+    var el=now-t0;
+    steps.forEach(function(s){
+      if(el<s.start||s.i>=s.list.length) return;
+      var p=Math.min(1,(el-s.start)/DUR), upto=Math.ceil(s.list.length*(1-Math.pow(1-p,2)));
+      var fills=new Bucket(), lines=new Bucket();
+      for(;s.i<upto;s.i++){var t=s.list[s.i]; if(s.fill) fills.add(fillKey(t),t); lines.add(lineKey(t),t)}
+      flushFill(ctx,fills); flushStroke(ctx,lines,1);   // 塗った菱形にも輪郭を引き直し、焼き付け後と同じ見え方にする
+    });
+    if(el<END){anim=requestAnimationFrame(frame)}
+    else{ drawFloor(g1); done=setTimeout(function(){ctx.clearRect(0,0,W,H)},60); }
+  })(t0);
+}
+
+function show(){ $('tcOut').textContent='累計 '+TC+' せいかい／標準 '+MIN.toFixed(0)+'分'; $('stageOut').textContent=prog?stageName(prog):''; }
+/* 1回＝1分。正答はサイトの速さの前後にばらつくが、育ちは 正答÷速さ なので平均すると1回で PER_MIN 枚 */
+function playOnce(){var c=Math.max(0,Math.round(PACE*(0.7+Math.random()*0.6)));TC+=c;return c/PACE}
+function grow_(dm){
+  MIN=Math.max(0,MIN+dm); show();
+  if(!tiles.length) return;
+  var g0=prog, g1=progress(); prog=g1; show(); grow(g0,g1);
+}
+$('pat').innerHTML=PATTERN_ORDER.map(function(k){return '<option value="'+k+'">'+GENS[k].name+'</option>'}).join('');
+$('pat').onchange=function(){PAT=this.value;cancelAnimationFrame(anim);clearTimeout(done);$('grow').getContext('2d').clearRect(0,0,W,H);regen()};
+function regen(){gen();calcMask();prog=progress();drawFloor(prog);show();
+  $('info').textContent=GENS[PAT].name+'：'+tiles.length+'枚（色1 '+THICK.length+'・色2 '+THIN.length+'）／生成 '+Math.round(GEN_MS)+'ms／全部そろうまで標準で約'+Math.round(2*tiles.length/PER_MIN)+'分（'+Math.round(2*tiles.length/PER_MIN/6)/10+'時間）'}
+$('pace').onchange=function(){PACE=Number(this.value)};
+$('c2').innerHTML=Object.keys(GEMS).map(function(k){return '<option value="'+k+'"'+(k===C2?' selected':'')+'>'+k+'</option>'}).join('');
+$('c2').onchange=function(){C2=this.value;FAM2=fam(GEMS[C2]);regen()};
+$('play1').onclick=function(){grow_(playOnce())};
+$('play10').onclick=function(){var m=0;for(var i=0;i<10;i++)m+=playOnce();grow_(m)};
+$('play50').onclick=function(){var m=0;for(var i=0;i<50;i++)m+=playOnce();grow_(m)};
+$('reset').onclick=function(){cancelAnimationFrame(anim);clearTimeout(done);TC=0;MIN=0;$('grow').getContext('2d').clearRect(0,0,W,H);prog=progress();drawFloor(prog);show()};
+$('modeGrid').onclick=function(e){if(e.target.closest('.card')) grow_(playOnce())};
+
+var rt=0;
+addEventListener('resize',function(){clearTimeout(rt);rt=setTimeout(regen,200)});
+
+// メニューを先に出し、床の計算はその後に回す（低速な端末でも、押せるまでの時間を床が遅らせない）
+renderMenu(); show();
+requestAnimationFrame(function(){setTimeout(function(){
+  regen();
+},0)});
+})();
+</script>
+</body>
+</html>
