@@ -96,6 +96,9 @@ make({ W, H, ox, oy, edge, margin }) → [{ p: [[x,y],...], cls: 1|0, dir: 0..4 
 
 多重格子は方向の数を1つ変えるだけで別の図形になる（`GrowingFigures.multigrid(N)`）。図形の種類を増やす第一の手段。
 
+各サイトでは、単元が図形を id で宣言する（算数タイムアタックは `UNIT.floorPattern`。`common/index.html` に `generators.js` を写してある）。
+どのサイトがどの図形かは `COLORS.md` の台帳に書く。
+
 ## 9. 見送った図形
 
 | 図形 | 理由 |
