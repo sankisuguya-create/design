@@ -444,6 +444,306 @@
     return out;
   }
 
+  /* ================================================================
+   *  3年の単元に向けた図形（利用者の評価でストックとして採用）
+   *  clockstar 時こくと時間 / pascal たし算とひき算の筆算 / chair かけ算の筆算 / fibgrid 表とグラフ /
+   *  farey 分数 / padovan 三角形と角 / decimal 小数
+   * ================================================================ */
+  var SQ3 = Math.sqrt(3);
+
+  /* ---------- 文字盤の星：12回対称。多重格子（6方向・同じずれ）の 60°菱形を短い対角線で正三角形2枚に割る ---------- */
+  function clockstar(g) {
+    var raw = multigrid(6, 0.5)({ W: g.W, H: g.H, ox: g.ox, oy: g.oy, edge: g.edge * 1.25, margin: g.margin }), out = [];
+    function ang(p, i) {
+      var a = p[(i + 3) % 4], b = p[i], c = p[(i + 1) % 4];
+      var u = [a[0] - b[0], a[1] - b[1]], v = [c[0] - b[0], c[1] - b[1]];
+      return Math.acos((u[0] * v[0] + u[1] * v[1]) / Math.hypot(u[0], u[1]) / Math.hypot(v[0], v[1])) * 180 / Math.PI;
+    }
+    raw.forEach(function (t) {
+      var p = t.p, a0 = ang(p, 0), mn = Math.min(a0, 180 - a0);
+      if (mn > 75) { out.push({ p: p, cls: 1, dir: t.dir }); return; }            // 正方形
+      if (mn < 45) { out.push({ p: p, cls: 1, dir: (t.dir + 2) % 5 }); return; }  // 細い菱形（30°）
+      var o = a0 > 90 ? 0 : 1;                                                    // 鈍角の頂点を結ぶ（短い対角線）
+      out.push({ p: [p[o], p[(o + 1) % 4], p[(o + 2) % 4]], cls: 0, dir: t.dir });
+      out.push({ p: [p[(o + 2) % 4], p[(o + 3) % 4], p[o]], cls: 0, dir: (t.dir + 1) % 5 });
+    });
+    return out;
+  }
+
+  /* ---------- パスカルの偶奇：六角のマスを中心から輪に数え、輪 n の各辺の k 番目に C(n,k) を置く。
+     どのマスも内側の隣2つの和になる（6つの扇それぞれがパスカルの三角形）。奇数を色1。C(n,k) が奇数 ⇔ (k & n) === k ---------- */
+  function pascal(g) {
+    var R = g.edge * 0.5, far = farthest(g) + R * 3, N = Math.ceil(far / (R * 1.5)) + 1, out = [];
+    var D = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+    function hex(q, r) {
+      var cx = g.ox + R * SQ3 * (q + r / 2), cy = g.oy + R * 1.5 * r, p = [];
+      for (var i = 0; i < 6; i++) { var a = Math.PI / 6 + i * Math.PI / 3; p.push([cx + R * Math.cos(a), cy + R * Math.sin(a)]); }
+      return p;
+    }
+    out.push({ p: hex(0, 0), cls: 1, dir: 0 });
+    for (var n = 1; n <= N; n++) {
+      var q = D[4][0] * n, r = D[4][1] * n;
+      for (var s = 0; s < 6; s++) for (var k = 0; k < n; k++) {
+        var p = hex(q, r);
+        if (onScreen(g, p, 0)) out.push({ p: p, cls: (k & n) === k ? 1 : 0, dir: 0 });
+        q += D[s][0]; r += D[s][1];
+      }
+    }
+    return out;
+  }
+
+  /* ---------- 椅子のタイル：L字（2×2 の箱から1隅を欠いた形）を、半分の大きさのL字4つに分ける置き換え。
+     o＝欠けた隅の向き（0..3、90°ずつ）。色は向きの組（0と2／1と3）で分ける ---------- */
+  function chair(g) {
+    var target = g.edge * 0.95, m = g.edge * 2;
+    var L = target; while (L < 2 * (Math.max(g.W, g.H) + 2 * m)) L *= 2;
+    var cx = g.W + m, cy = g.H + m;   // 欠けた隅（右下）の角を画面の右下の外に置き、画面を覆う3/4の側に入れる
+    // 子：[箱の中心のずれ（親の箱の1/4単位）, 向きの差]
+    var KIDS = [[0, 0, 0], [-1, -1, 0], [1, -1, 1], [-1, 1, 3]];
+    function rot(x, y, o) { for (var i = 0; i < o; i++) { var t = x; x = -y; y = t; } return [x, y]; }
+    function poly(c) {   // c = [cx, cy, 箱の一辺, o]
+      var h = c[2] / 2, P = [[-1, -1], [1, -1], [1, 0], [0, 0], [0, 1], [-1, 1]];
+      return P.map(function (v) { var w = rot(v[0], v[1], c[3]); return [c[0] + w[0] * h, c[1] + w[1] * h]; });
+    }
+    var T = [[cx, cy, L, 0]];
+    while (T[0][2] > target * 1.01) {
+      var N = [];
+      for (var i = 0; i < T.length; i++) {
+        var t = T[i], u = t[2] / 4;
+        for (var j = 0; j < 4; j++) {
+          var d = rot(KIDS[j][0], KIDS[j][1], t[3]);
+          var c = [t[0] + d[0] * u, t[1] + d[1] * u, t[2] / 2, (t[3] + KIDS[j][2]) % 4];
+          if (onScreen(g, poly(c), c[2] * 0.1)) N.push(c);
+        }
+      }
+      T = N;
+    }
+    return T.map(function (c) {
+      var k = Math.floor(c[0] / c[2]) + Math.floor(c[1] / c[2]);
+      return { p: poly(c), cls: c[3] % 2, dir: (c[3] + ((k % 3) + 3) % 3) % 5 };
+    });
+  }
+
+  /* ---------- フィボナッチの格子：列の幅と行の高さが長 L・短 S（L/S＝黄金比）で、フィボナッチ語の順に並ぶ。
+     色1＝長×長と短×短、色2＝長×短 ---------- */
+  function fibgrid(g) {
+    var PHI = (1 + Math.sqrt(5)) / 2, S = g.edge * 0.62, L = S * PHI;
+    function cuts(lo, hi, o, beta) {
+      function X(n) { return S * n + (L - S) * Math.floor(n / PHI + beta); }
+      var n0 = Math.floor((lo - o) / S) - 2, n1 = Math.ceil((hi - o) / S) + 2, xs = [];
+      for (var n = n0; n <= n1; n++) xs.push([o + X(n) - X(0), X(n + 1) - X(n) > (S + L) / 2]);
+      return xs;
+    }
+    var C = cuts(0, g.W, g.ox, 0.5), R = cuts(0, g.H, g.oy, 0.19), out = [];
+    for (var i = 0; i < C.length - 1; i++) {
+      var x0 = C[i][0], x1 = C[i + 1][0]; if (x1 < 0 || x0 > g.W) continue;
+      for (var j = 0; j < R.length - 1; j++) {
+        var y0 = R[j][0], y1 = R[j + 1][0]; if (y1 < 0 || y0 > g.H) continue;
+        var a = C[i][1], b = R[j][1];
+        out.push({ p: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], cls: a === b ? 1 : 0, dir: a ? (b ? 0 : 2) : (b ? 3 : 1) });
+      }
+    }
+    return out;
+  }
+
+  /* ---------- ファレイの円盤：上半平面のファレイ分割（頂点は既約分数 p/q）を ρ=e^{iπ/3} が中心に来るように円板へ写す。
+     隣り合う a/b・c/d の間には (a+c)/(b+d) の三角形が入る。大きい三角形は中心 ρ から6つに割る（モジュラー群の三角形）。
+     小さくなった先は、測地線と円周で囲まれた残りを1枚にする。円の外には円での鏡映の写しを置く（リーマン球面の南北） ---------- */
+  function farey(g) {
+    var Rd = Math.min(g.W, g.H) * 0.44, cx = g.W / 2, cy = g.H / 2, STEP = 4, out = [];
+    var RX = 0.5, RY = SQ3 / 2;
+    function cdiv(a, b) { var d = b[0] * b[0] + b[1] * b[1]; return [(a[0] * b[0] + a[1] * b[1]) / d, (a[1] * b[0] - a[0] * b[1]) / d]; }
+    function toDisk(z) { return cdiv([z[0] - RX, z[1] - RY], [z[0] - RX, z[1] + RY]); }
+    function ideal(v) { return cdiv([v[0] - RX * v[1], -RY * v[1]], [v[0] - RX * v[1], RY * v[1]]); }   // p/q（q=0 は ∞）
+    function scr(w) { return [cx + Rd * w[0], cy - Rd * w[1]]; }
+    // 円の外は、円での鏡映（反転 w → w/|w|²）で内側の写しを置く。中心 0 は無限遠へ行くので、両隣の向きの遠い2点に置き換える
+    function mirror(ws) {
+      var o = [];
+      for (var i = 0; i < ws.length; i++) {
+        var w = ws[i], m = w[0] * w[0] + w[1] * w[1];
+        if (m > 1e-12) { o.push([w[0] / m, w[1] / m]); continue; }
+        [ws[(i + ws.length - 1) % ws.length], ws[(i + 1) % ws.length]].forEach(function (q) {
+          var l = Math.hypot(q[0], q[1]); o.push([q[0] / l * 40, q[1] / l * 40]);
+        });
+      }
+      return o;
+    }
+    function geo(P, Q) {   // 円板の2点を結ぶ測地線（P を含み Q を含まない）。向きに依らず同じ点列になるよう正規の向きで作る
+      var flip = P[0] > Q[0] || (P[0] === Q[0] && P[1] > Q[1]); if (flip) { var t = P; P = Q; Q = t; }
+      var det = P[0] * Q[1] - P[1] * Q[0], pts = [];
+      var len = Math.hypot(P[0] - Q[0], P[1] - Q[1]) * Rd;
+      if (Math.abs(det) < 1e-9 || len < STEP) { pts = [P, Q]; }
+      else {
+        var a = (P[0] * P[0] + P[1] * P[1] + 1) / 2, b = (Q[0] * Q[0] + Q[1] * Q[1] + 1) / 2;
+        var c = [(a * Q[1] - b * P[1]) / det, (b * P[0] - a * Q[0]) / det], r = Math.hypot(P[0] - c[0], P[1] - c[1]);
+        var a0 = Math.atan2(P[1] - c[1], P[0] - c[0]), a1 = Math.atan2(Q[1] - c[1], Q[0] - c[0]), d = a1 - a0;
+        while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU;
+        // 円の外の写しは最大で4倍ほどに伸びるので、その分細かく打つ
+        var n = Math.max(1, Math.ceil(Math.abs(d) * r * Rd * 2 / STEP));
+        for (var k = 0; k <= n; k++) { var t2 = a0 + d * k / n; pts.push([c[0] + r * Math.cos(t2), c[1] + r * Math.sin(t2)]); }
+        pts[0] = P; pts[n] = Q;
+      }
+      if (flip) pts.reverse();
+      pts.pop();
+      return pts;
+    }
+    function emit(ws, cls, dir) {
+      if (ws.length < 3) return;
+      var s = ws.map(scr); if (onScreen(g, s, 0)) out.push({ p: s, cls: cls, dir: dir });
+      var m = mirror(ws).map(scr); if (onScreen(g, m, 0)) out.push({ p: m, cls: 1 - cls, dir: (dir + 2) % 5 });
+    }
+    function tile(ws, cls, dir) {
+      var p = [];
+      for (var i = 0; i < ws.length; i++) p = p.concat(geo(ws[i], ws[(i + 1) % ws.length]));
+      emit(p, cls, dir);
+    }
+    function mob(M, z) { return cdiv([M[0] * z[0] + M[1], M[0] * z[1]], [M[2] * z[0] + M[3], M[2] * z[1]]); }
+    var BASE = [[0.5, RY], [0, 1], [1, 1], [0.5, 0.5]];   // ρ, i, 1+i, (1+i)/2
+    function triangle(u, v, depth) {   // 頂点 u＝0、v＝∞、u+v＝1 に当たる三角形
+      var M = [v[0], u[0], v[1], u[1]], n = [u[0] + v[0], u[1] + v[1]];
+      var wc = toDisk(mob(M, BASE[0])), rc = Math.hypot(wc[0], wc[1]), size = (1 - rc) * Rd * Math.max(1, 1 / Math.max(rc, 0.25));
+      var U = ideal(u), V = ideal(v), N = ideal(n);
+      if (size < g.edge * 0.6) { tile([U, N, V], depth & 1, depth % 5); return; }
+      var wi = toDisk(mob(M, BASE[1])), w1 = toDisk(mob(M, BASE[2])), wh = toDisk(mob(M, BASE[3]));
+      var six = [[U, wi], [wi, V], [V, w1], [w1, N], [N, wh], [wh, U]];
+      for (var k = 0; k < 6; k++) tile([six[k][0], six[k][1], wc], k & 1, (depth + (k >> 1)) % 5);
+    }
+    function region(a, b, t, depth) {   // 辺 a–b の、t と反対の側
+      var s = [a[0] + b[0], a[1] + b[1]];
+      if ((s[0] === t[0] && s[1] === t[1]) || (s[0] === -t[0] && s[1] === -t[1])) s = [a[0] - b[0], a[1] - b[1]];
+      var A = ideal(a), B = ideal(b), chord = Math.hypot(A[0] - B[0], A[1] - B[1]) * Rd;
+      // 残りの領域（測地線 A–B と円周の弧）の点列。t の無い側の弧を回る
+      var aa = Math.atan2(A[1], A[0]), ab = Math.atan2(B[1], B[0]), T = ideal(t), at = Math.atan2(T[1], T[0]);
+      function between(x, lo, hi) { var d1 = ((hi - lo) % TAU + TAU) % TAU, d2 = ((x - lo) % TAU + TAU) % TAU; return d2 < d1; }
+      var d = ((aa - ab) % TAU + TAU) % TAU; if (between(at, ab, aa)) d -= TAU;   // B から A へ回る角
+      var n = Math.max(1, Math.ceil(Math.abs(d) * Rd / STEP)), arcP = [];
+      for (var k = 0; k < n; k++) { var th = ab + d * k / n; arcP.push([Math.cos(th), Math.sin(th)]); }
+      var poly = geo(A, B).concat(arcP);
+      if (!onScreen(g, poly.map(scr), 0) && !onScreen(g, mirror(poly).map(scr), 0)) return;
+      if (chord < g.edge * 0.8) { emit(poly, depth & 1, depth % 5); return; }
+      var bb2 = (s[0] === a[0] + b[0] && s[1] === a[1] + b[1]) ? b : [-b[0], -b[1]];
+      triangle(a, bb2, depth);
+      region(a, s, b, depth + 1);
+      region(s, b, a, depth + 1);
+    }
+    var u0 = [0, 1], v0 = [1, 0], n0 = [1, 1];
+    triangle(u0, v0, 0);
+    region(u0, n0, v0, 1); region(n0, v0, u0, 1); region(v0, u0, n0, 1);
+    return out;
+  }
+
+  /* ---------- パドバンの三角渦：正三角形を渦に並べる。外形を六角形（辺の長さ s[0..5]、向きは60°刻み）で持ち、
+     辺 i に外向きの正三角形を足すと s[i-1]・s[i+1] が s[i] だけ伸びて s[i] は0になる。i を1つずつ回すと辺は
+     1,1,1,2,2,3,4,5,7,9,12…（パドバン数）。各三角形を、どれも同じくらいの大きさのタイルになるよう三角格子で割る（小さい三角形は1枚のまま）。どの三角形も縁から中心まで同じ比で入れ子の3段に分け、段ごと・三角形ごとに色を交互にする（大きい三角形ほど段が太い＝相似の入れ子） ---------- */
+  function padovan(g) {
+    var tsz = g.edge * 1.15, u = g.edge * 0.22, far = farthest(g) + tsz * 2, out = [];   // u＝パドバンの1、tsz＝タイルの1辺
+    var DV = []; for (var k = 0; k < 6; k++) DV.push([Math.cos(k * Math.PI / 3), -Math.sin(k * Math.PI / 3)]);
+    var V = [[0, 0], [1, 0], [1, 0], [0.5, -SQ3 / 2], [0.5, -SQ3 / 2], [0, 0]], s = [1, 0, 1, 0, 1, 0];
+    // 最初の三角形の重心を育ち始める点に置く
+    var gx = 0.5, gy = -SQ3 / 6;
+    V = V.map(function (p) { return [p[0] - gx, p[1] - gy]; });
+    function emit(P0, P1, P2, Lm, idx) {
+      var pts = [P0, P1, P2].map(function (p) { return [g.ox + p[0] * u, g.oy + p[1] * u]; });
+      if (!onScreen(g, pts, u * Lm * 0.1)) return;
+      var m = Math.max(1, Math.round(Lm * u / tsz));   // 1辺を m 等分して、どの三角形も同じくらいの大きさのタイルに割る
+      var ex = [(pts[1][0] - pts[0][0]) / m, (pts[1][1] - pts[0][1]) / m], ey = [(pts[2][0] - pts[0][0]) / m, (pts[2][1] - pts[0][1]) / m];
+      function P(a, b) { return [pts[0][0] + a * ex[0] + b * ey[0], pts[0][1] + a * ex[1] + b * ey[1]]; }
+      function band(r) { return Math.floor(r * 6 / m); }   // 縁から中心まで同じ比で3段（相似の入れ子）
+      for (var a = 0; a < m; a++) for (var b = 0; a + b < m; b++) {
+        var c = m - 1 - a - b, ring = Math.min(a, b, c), tri = [P(a, b), P(a + 1, b), P(a, b + 1)];
+        if (onScreen(g, tri, 0)) out.push({ p: tri, cls: (band(ring) + idx) & 1, dir: (idx + (ring >> 1)) % 5 });
+        if (a + b < m - 1) {
+          var c2 = m - 2 - a - b, ring2 = Math.min(a, b, c2), tri2 = [P(a + 1, b), P(a + 1, b + 1), P(a, b + 1)];
+          if (onScreen(g, tri2, 0)) out.push({ p: tri2, cls: (band(ring2) + idx) & 1, dir: (idx + (ring2 >> 1) + 2) % 5 });
+        }
+      }
+    }
+    emit(V[0], V[1], V[3], 1, 0);
+    var i = 0, idx = 1, Lm = 1;
+    function covers() {   // 画面の四隅（＋余白）が外形の六角形の内側か
+      var C = [[-tsz, -tsz], [g.W + tsz, -tsz], [-tsz, g.H + tsz], [g.W + tsz, g.H + tsz]];
+      return C.every(function (c) {
+        var x = (c[0] - g.ox) / u, y = (c[1] - g.oy) / u;
+        for (var e = 0; e < 6; e++) {
+          if (s[e] === 0) continue;
+          var a = V[e], d = DV[e];   // 最初の三角形の重心（原点）と同じ側にあるか
+          if (((x - a[0]) * d[1] - (y - a[1]) * d[0]) * ((0 - a[0]) * d[1] - (0 - a[1]) * d[0]) < 0) return false;
+        }
+        return true;
+      });
+    }
+    while (!covers() && Lm * u < far * 12) {
+      Lm = s[i];
+      var im = (i + 5) % 6, ip = (i + 1) % 6, A = [V[i][0] + Lm * DV[im][0], V[i][1] + Lm * DV[im][1]];
+      emit(V[i], V[ip], A, Lm, idx);
+      s[im] += Lm; s[ip] += Lm; s[i] = 0; V[i] = A; V[ip] = A.slice();
+      i = (i + 1) % 6; idx++;
+    }
+    return out;
+  }
+
+  /* ---------- 十進の渦：対数極座標 (θ, s=log r) で、腕の線 s − kθ = 一定（k = ln10/2π、1周で10倍）と
+     放射の線 θ = 一定 で切る。半径が2倍になる円（仕切り）ごとに腕と放射の本数を2倍にして、マスの大きさをそろえる。
+     中心は10等分の輪と円。色は腕ごとに交互 ---------- */
+  function decimal(g) {
+    var K = Math.log(10) / TAU, n0 = 10, c0 = 30;
+    var R0 = g.edge * 0.8 * n0 / Math.log(10), far = farthest(g) + g.edge * 2, out = [];
+    function toXY(th, s) { var r = Math.exp(s); return [g.ox + r * Math.cos(th), g.oy + r * Math.sin(th)]; }
+    function edgePts(P, Q) {   // (θ,s) の線分を、画面で細かく打った点列に（P を含み Q を含まない）
+      var r = Math.exp(Math.max(P[1], Q[1])), len = Math.hypot((Q[0] - P[0]) * r, (Q[1] - P[1]) * r);
+      var n = Math.max(1, Math.ceil(len / 4)), pts = [];
+      for (var k = 0; k < n; k++) pts.push(toXY(P[0] + (Q[0] - P[0]) * k / n, P[1] + (Q[1] - P[1]) * k / n));
+      return pts;
+    }
+    function clip(poly, lo, hi) {   // s の範囲で切る
+      function cut(pl, keep, val) {
+        var o = [];
+        for (var i = 0; i < pl.length; i++) {
+          var A = pl[i], B = pl[(i + 1) % pl.length], ia = keep(A[1]), ib = keep(B[1]);
+          if (ia) o.push(A);
+          if (ia !== ib) { var t = (val - A[1]) / (B[1] - A[1]); o.push([A[0] + (B[0] - A[0]) * t, val]); }
+        }
+        return o;
+      }
+      poly = cut(poly, function (s) { return s >= lo; }, lo);
+      if (poly.length < 3) return poly;
+      return cut(poly, function (s) { return s <= hi; }, hi);
+    }
+    // 中心：円と10等分の輪
+    var rc = R0 * 0.45, cpts = [];
+    for (var q = 0; q < 60; q++) cpts.push([g.ox + rc * Math.cos(q * TAU / 60), g.oy + rc * Math.sin(q * TAU / 60)]);
+    out.push({ p: cpts, cls: 1, dir: 0 });
+    for (var j = 0; j < 10; j++) {
+      var P = edgePts([j * TAU / 10, Math.log(rc)], [(j + 1) * TAU / 10, Math.log(rc)]).concat([toXY((j + 1) * TAU / 10, Math.log(rc))]);
+      var Q = edgePts([(j + 1) * TAU / 10, Math.log(R0)], [j * TAU / 10, Math.log(R0)]).concat([toXY(j * TAU / 10, Math.log(R0))]);
+      out.push({ p: P.concat(Q), cls: j & 1, dir: j % 5 });
+    }
+    for (var b = 0; R0 * Math.pow(2, b) < far; b++) {
+      var n = n0 << b, c = c0 << b, du = Math.log(10) / n, dth = TAU / c;
+      var lo = Math.log(R0) + b * Math.LN2, hi = lo + Math.LN2;
+      var rb = Math.exp(hi), tsz = rb * Math.max(dth, du) * 2 + g.edge;
+      for (var jj = 0; jj < c; jj++) {
+        var t0 = jj * dth, t1 = t0 + dth;
+        // 帯の中のこの扇が画面から遠ければ、形を作らずに飛ばす（外側の帯は大半が画面の外）
+        var ex0 = 1e9, ex1 = -1e9, ey0 = 1e9, ey1 = -1e9;
+        [[t0, lo], [t1, lo], [t0, hi], [t1, hi]].forEach(function (q) { var xy = toXY(q[0], q[1]); ex0 = Math.min(ex0, xy[0]); ex1 = Math.max(ex1, xy[0]); ey0 = Math.min(ey0, xy[1]); ey1 = Math.max(ey1, xy[1]); });
+        if (ex1 < -tsz || ex0 > g.W + tsz || ey1 < -tsz || ey0 > g.H + tsz) continue;
+        var i0 = Math.floor((lo - K * t1) / du) - 1, i1 = Math.ceil((hi - K * t0) / du) + 1;
+        for (var i = i0; i < i1; i++) {
+          var ua = i * du, ub = ua + du;
+          var poly = clip([[t0, ua + K * t0], [t1, ua + K * t1], [t1, ub + K * t1], [t0, ub + K * t0]], lo, hi);
+          if (poly.length < 3) continue;
+          var pts = [];
+          for (var e = 0; e < poly.length; e++) pts = pts.concat(edgePts(poly[e], poly[(e + 1) % poly.length]));
+          if (!onScreen(g, pts, 0)) continue;
+          var arm = ((i % n) + n) % n;
+          out.push({ p: pts, cls: arm & 1, dir: jj % 5 });
+        }
+      }
+    }
+    return out;
+  }
+
   var GENERATORS = {
     penrose:   { name: 'ペンローズ（5回対称）', make: penrose },
     octagon:   { name: '八角の星（8回対称）',   make: multigrid(4) },
@@ -456,7 +756,14 @@
     mandala:   { name: '円弧の曼荼羅（4回対称）', make: mandala },
     decagon:   { name: '十角の星（10回対称）',   make: multigrid(5, 0.5) },
     petals:    { name: '渦の花びら（6回対称）',  make: petals },
-    tape:      { name: '巻き尺の渦',             make: tape }
+    tape:      { name: '巻き尺の渦',             make: tape },
+    clockstar: { name: '文字盤の星（12回対称・正方形と三角形）', make: clockstar },
+    pascal:    { name: 'パスカルの偶奇（六角のマス）',          make: pascal },
+    chair:     { name: '椅子のタイル（L字の置き換え）',         make: chair },
+    fibgrid:   { name: 'フィボナッチの格子',                    make: fibgrid },
+    farey:     { name: 'ファレイの円盤（ポアンカレ円板）',      make: farey },
+    padovan:   { name: 'パドバンの三角渦',                      make: padovan },
+    decimal:   { name: '十進の渦（1周で10倍）',                 make: decimal }
   };
 
   var api = { GENERATORS: GENERATORS, multigrid: multigrid };
