@@ -30,7 +30,8 @@
 |---|---|---|---|---|---|
 | arithmetic-timeattack | 九九（kuku） | 3 | octagon | amethyst | 床あり |
 | arithmetic-timeattack | あまりのあるわり算（divmod） | 3 | penrose | sapphire | 床あり |
-
+| arithmetic-timeattack | 長さ（length） | 3 | tape | amethyst | 床あり |
+| arithmetic-timeattack | 重さ（weight） | 3 | mandala | amethyst | 床あり |
 | arithmetic-timeattack | 円と球（予定） | 3 | whirl | 未定 | 候補（未実装） |
 
 九九とあまりのあるわり算の図形は、利用者の指示で入れ替えた（色2はサイトの色なので入れ替えていない）。
