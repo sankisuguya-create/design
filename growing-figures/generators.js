@@ -168,7 +168,7 @@
      長い向きになる（大きな円から、中心が中に入った小さな円を取り除くとき。内向きの丸い渦格子の仕切りで起きた）。
      短い向きの弧の中点が多角形の内側かどうかで決める。全部が内側なら null */
   function inPoly(pt,poly){var c=false;for(var i=0,j=poly.length-1;i<poly.length;j=i++){var a=poly[i],b=poly[j];if((a[1]>pt[1])!==(b[1]>pt[1])&&pt[0]<(b[0]-a[0])*(pt[1]-a[1])/(b[1]-a[1])+a[0])c=!c}return c}
-  function minusDisk(pts,c,R){
+  function minusDisk(pts,c,R,shortOnly){   // shortOnly：削り跡をいつも短い向きの弧にする（円がタイルよりずっと大きいとき。凹んだタイルで向きの判定が外れるのを防ぐ）
     var n=pts.length,R2=R*R,ins=pts.map(function(p){var dx=p[0]-c[0],dy=p[1]-c[1];return dx*dx+dy*dy<R2});   // Math.hypot は遅いので2乗で比べる
     var s0=ins.indexOf(false); if(s0<0) return null; if(ins.indexOf(true)<0) return pts;
     function hit(A,B){var dx=B[0]-A[0],dy=B[1]-A[1],fx=A[0]-c[0],fy=A[1]-c[1],a=dx*dx+dy*dy,b=2*(fx*dx+fy*dy),cc=fx*fx+fy*fy-R*R,D=Math.sqrt(Math.max(0,b*b-4*a*cc));
@@ -181,7 +181,7 @@
       if(ins[i]&&!ins[j]){
         var Y=hit(A,B), a0=Math.atan2(exitP[1]-c[1],exitP[0]-c[0]), a1=Math.atan2(Y[1]-c[1],Y[0]-c[0]), dd=a1-a0;
         while(dd>Math.PI)dd-=TAU; while(dd<-Math.PI)dd+=TAU;
-        var am=a0+dd/2, longWay=!inPoly([c[0]+R*Math.cos(am),c[1]+R*Math.sin(am)],pts);
+        var am=a0+dd/2, longWay=!shortOnly&&!inPoly([c[0]+R*Math.cos(am),c[1]+R*Math.sin(am)],pts);
         out=out.concat(arc(c,exitP,Y,0.07,longWay).slice(1));out.push(Y);exitP=null;    // 円周をたどって出る点へ
       }
     }
@@ -744,6 +744,142 @@
     return out;
   }
 
+  /* ================================================================
+   *  鱗のピル（利用者の評価でストックとして採用：輪ごとに逆×渦の腕、同じ向き×フィボナッチ）
+   *  ピル＝長方形の短辺に半円（直径＝帯の幅）が付いた形。曲がったピルは同心の2本の弧を半円2つで結んだ形。
+   *  試作の経緯（輪郭のある版・すき間のある版・3つのパラメータの8通り）は ideas/pills.js
+   * ================================================================ */
+  /* 鱗のピル：曲がる・隙間なし。どの継ぎ目でも、片方のピルの端をもう片方の端の後ろに入れ、輪をピルだけで埋める。
+     見える形はどれも「片方の端がふくらみ、もう片方がえぐれた」同じ形（鱗）。中心の円は長さ0のピル。
+     dirMode：'same'＝どの輪も同じ向きに重ねる、'alt'＝輪ごとに向きを逆にする（隣の輪が逆回りに見える）
+     colMode：'alt'＝輪の中で A/B 交互、'fib'＝フィボナッチ語、'arm'＝対数螺旋の腕（色の層に渦が浮かぶ） */
+  function pillFib(j) { return Math.floor((j + 2) / PHI) - Math.floor((j + 1) / PHI); }   // フィボナッチ語（1 が約62%）
+  function makeScales(dirMode, colMode) {
+    return function (g) {
+      var w = g.edge * 0.72, SLOT = 2.6 * w, r0 = w * 0.8, far = farthest(g) + w * 2, out = [];
+      function P(u, v) { return [g.ox + v * Math.cos(u), g.oy + v * Math.sin(u)]; }
+      function side(v, ua, ub) {
+        var d = ub - ua, n = Math.max(1, Math.ceil(Math.abs(d) / Math.min(0.25, Math.sqrt(0.2 / v)))), o = [];
+        for (var k = 0; k < n; k++) o.push(P(ua + d * k / n, v));
+        return o;
+      }
+      function cap(v0, v1, u, s) {
+        var c = P(u, (v0 + v1) / 2), h = (v1 - v0) / 2, cr = [Math.cos(u), Math.sin(u)], ct = [-Math.sin(u) * s, Math.cos(u) * s];
+        var n = Math.max(6, Math.ceil(Math.PI * h / 3)), o = [];
+        for (var k = 0; k < n; k++) {
+          var a = Math.PI * k / n;
+          o.push([c[0] + h * (Math.cos(a) * cr[0] + Math.sin(a) * ct[0]), c[1] + h * (Math.cos(a) * cr[1] + Math.sin(a) * ct[1])]);
+        }
+        return o;
+      }
+      function rev(pts, first) { return [first].concat(pts.slice(1).reverse()); }
+      var ARMS = 8, TW = 1.6;
+      function color(k, i, n, uc, vm) {
+        if (colMode === 'alt') return i & 1;
+        if (colMode === 'fib') return pillFib(i + k * 7);
+        var t = uc - TW * Math.log(vm / r0 + 1);
+        return Math.floor((((t / TAU) % 1 + 1) % 1) * ARMS) & 1;
+      }
+      var disk = []; for (var q = 0; q < 60; q++) disk.push(P(q * TAU / 60, r0));
+      out.push({ p: disk, cls: 1, dir: 0 });
+      for (var k = 0, v0 = r0; v0 < far; k++, v0 += w) {
+        var v1 = v0 + w, vm = v0 + w / 2, n = Math.max(3, Math.round(TAU * vm / SLOT));
+        if (colMode === 'alt' && n % 2) n++;                       // 交互は偶数でないと1周で食い違う
+        var al = TAU / n, off = k * Math.PI * (3 - Math.sqrt(5)), fwd = dirMode === 'same' || (k & 1) === 0;
+        // fwd：どのピルも終わりの端が次のピルの始まりの後ろ（始まり＝ふくらむ、終わり＝えぐれる）。逆はその鏡
+        for (var i = 0; i < n; i++) {
+          var s0 = off + i * al, s1 = s0 + al;
+          var mc = P(s0 + al / 2, vm), rad = vm * al / 2 + w * 2;
+          if (mc[0] < -rad || mc[0] > g.W + rad || mc[1] < -rad || mc[1] > g.H + rad) continue;
+          var sg = fwd ? -1 : 1;   // 継ぎ目の半円がふくらむ向き（手前のピルの端）
+          var poly = side(v1, s0, s1).concat(cap(v0, v1, s1, sg), side(v0, s1, s0), rev(cap(v0, v1, s0, sg), P(s0, v0)));
+          if (!onScreen(g, poly, 0)) continue;
+          out.push({ p: poly, cls: color(k, i, n, s0 + al / 2, vm), dir: (k + i) % 5 });
+        }
+      }
+      return out;
+    };
+  }
+
+
+
+  /* ================================================================
+   *  円と球（起点が2つ。利用者の評価で採用、単元「円と球」の床）
+   *  円＝鱗のピル・渦（makeScales('alt','arm')）を育ち始める点 (ox, oy) から。
+   *  球＝フィボナッチ球を、画面の反対側の隅寄りに置いた円板に写したもの。球は床（円の模様）の上に乗っている：
+   *  円のタイルは球の輪郭で削り（minusDisk）、球の中にまるごと入るタイルは持たない。
+   *  育つ順：タイルに o（0〜1）を持たせる。円と球それぞれの中で起点からの距離の順位を枚数で割った値なので、
+   *  共通エンジンが o の順に並べると、円と球が同じ割合ずつ交互に育つ（どちらも同じ正答数で全部そろう）。
+   *  球：点 i を z=1-(2i+1)/N、経度 i×黄金角に置き、x 軸まわりに −0.62、y 軸まわりに 0.38 傾けて正射影する。
+   *  手前の半球の点のボロノイ細胞（円板で切る）をタイルにする（縁に近いほど細胞が詰まり、球に見える）。
+   *  色は元の経度で8つの舟形に分けて交互（ビーチボールの縫い目）。明暗は光（左上手前から）の当たり方を5段の dir に写す
+   * ================================================================ */
+  function sphereCenter(g) {
+    var wide = g.W >= g.H;
+    return { c: wide ? [g.W * 0.86, g.H * 0.28] : [g.W * 0.5, g.H * 0.7], R: Math.min(g.W, g.H) * 0.3 };
+  }
+  function fibSphere(g, c, R) {
+    var edge = g.edge, N = Math.max(80, Math.round(2 * Math.PI * R * R / (edge * edge * 0.95))), GA = Math.PI * (3 - Math.sqrt(5));
+    var cx = Math.cos(-0.62), sx = Math.sin(-0.62), cy = Math.cos(0.38), sy = Math.sin(0.38), pts = [];
+    for (var i = 0; i < N; i++) {
+      var z = 1 - (2 * i + 1) / N, r = Math.sqrt(1 - z * z), th = i * GA, x = r * Math.cos(th), y = r * Math.sin(th);
+      var lon = Math.atan2(y, x), y1 = y * cx - z * sx, z1 = y * sx + z * cx, x2 = x * cy + z1 * sy, z2 = -x * sy + z1 * cy;
+      if (z2 < -0.02) continue;
+      pts.push({ X: c[0] + R * x2, Y: c[1] - R * y1, n: [x2, y1, z2], gore: Math.floor((lon + Math.PI) / (Math.PI / 4)) & 7 });
+    }
+    var disk = []; for (var q = 0; q < 120; q++) disk.push([c[0] + R * Math.cos(q * Math.PI / 60), c[1] + R * Math.sin(q * Math.PI / 60)]);
+    function clip(poly, p, o) {
+      var mx = (p.X + o.X) / 2, my = (p.Y + o.Y) / 2, nx = o.X - p.X, ny = o.Y - p.Y, out = [];
+      for (var i = 0; i < poly.length; i++) {
+        var A = poly[i], B = poly[(i + 1) % poly.length], da = (A[0] - mx) * nx + (A[1] - my) * ny, db = (B[0] - mx) * nx + (B[1] - my) * ny;
+        if (da <= 0) out.push(A);
+        if ((da < 0 && db > 0) || (da > 0 && db < 0)) { var u = da / (da - db); out.push([A[0] + (B[0] - A[0]) * u, A[1] + (B[1] - A[1]) * u]); }
+      }
+      return out;
+    }
+    var L = [-0.45, 0.55, 0.7], ll = Math.sqrt(L[0] * L[0] + L[1] * L[1] + L[2] * L[2]), rr = edge * 4.5, out = [];
+    // 明るさ k（−0.28〜0.22）を、共通エンジンの5段の明暗（dir 0..4 ＝ 0, −0.1, +0.14, −0.18, +0.24）の近い段に写す
+    var STEP = [[-0.18, 3], [-0.1, 1], [0, 0], [0.14, 2], [0.24, 4]];
+    pts.forEach(function (p) {
+      var poly = disk;
+      for (var j = 0; j < pts.length; j++) {
+        var o = pts[j]; if (o === p) continue;
+        var dx = o.X - p.X, dy = o.Y - p.Y; if (dx * dx + dy * dy < rr * rr) poly = clip(poly, p, o);
+      }
+      if (poly.length < 3) return;
+      var lam = Math.max(0, (p.n[0] * L[0] + p.n[1] * L[1] + p.n[2] * L[2]) / ll), k = -0.28 + 0.5 * lam, best = 0;
+      for (var s = 1; s < 5; s++) if (Math.abs(STEP[s][0] - k) < Math.abs(STEP[best][0] - k)) best = s;
+      out.push({ p: poly, cls: p.gore & 1, dir: STEP[best][1] });
+    });
+    return out;
+  }
+  function circleSphere(g) {
+    var S = sphereCenter(g), R2 = S.R * S.R, circ = [], sph;
+    function vis(p) {
+      var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+      for (var i = 0; i < p.length; i++) { x0 = Math.min(x0, p[i][0]); x1 = Math.max(x1, p[i][0]); y0 = Math.min(y0, p[i][1]); y1 = Math.max(y1, p[i][1]); }
+      return !(x1 <= 0 || x0 >= g.W || y1 <= 0 || y0 >= g.H);
+    }
+    makeScales('alt', 'arm')(g).forEach(function (t) {
+      if (!vis(t.p)) return;
+      var p = t.p, any = false;
+      for (var i = 0; i < p.length; i++) { var dx = p[i][0] - S.c[0], dy = p[i][1] - S.c[1]; if (dx * dx + dy * dy < R2) { any = true; break; } }
+      if (any) { p = minusDisk(p, S.c, S.R, true); if (!p || p.length < 3) return; }
+      circ.push({ p: p, cls: t.cls, dir: t.dir });
+    });
+    sph = fibSphere(g, S.c, S.R).filter(function (t) { return vis(t.p); });
+    function order(list, o) {
+      list.forEach(function (t) {
+        var cx = 0, cy = 0; t.p.forEach(function (q) { cx += q[0]; cy += q[1]; });
+        cx /= t.p.length; cy /= t.p.length; t._d = (cx - o[0]) * (cx - o[0]) + (cy - o[1]) * (cy - o[1]);
+      });
+      list.sort(function (a, b) { return a._d - b._d; });
+      list.forEach(function (t, i) { t.o = (i + 0.5) / list.length; delete t._d; });
+    }
+    order(circ, [g.ox, g.oy]); order(sph, S.c);
+    return circ.concat(sph);
+  }
+
   var GENERATORS = {
     penrose:   { name: 'ペンローズ（5回対称）', make: penrose },
     octagon:   { name: '八角の星（8回対称）',   make: multigrid(4) },
@@ -763,7 +899,10 @@
     fibgrid:   { name: 'フィボナッチの格子',                    make: fibgrid },
     farey:     { name: 'ファレイの円盤（ポアンカレ円板）',      make: farey },
     padovan:   { name: 'パドバンの三角渦',                      make: padovan },
-    decimal:   { name: '十進の渦（1周で10倍）',                 make: decimal }
+    decimal:   { name: '十進の渦（1周で10倍）',                 make: decimal },
+    scaleswirl: { name: '鱗のピル・渦（輪ごとに逆向き・渦の腕で染め分け）', make: makeScales('alt', 'arm') },
+    scalefib:   { name: '鱗のピル・フィボナッチ（同じ向き・フィボナッチ語で染め分け）', make: makeScales('same', 'fib') },
+    circlesphere: { name: '円と球（起点2つ：鱗のピルの渦とフィボナッチ球）', make: circleSphere }
   };
 
   var api = { GENERATORS: GENERATORS, multigrid: multigrid };
