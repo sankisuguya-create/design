@@ -492,6 +492,66 @@
     return out;
   }
 
+  /* 筆算の手続き：a と b をたしたとき、どこかの位で くり上がるか（ひき算 a+b−b でくり下がるのと同じ条件） */
+  function carries(a, b) {
+    for (; a > 0 || b > 0; a = Math.floor(a / 10), b = Math.floor(b / 10)) if (a % 10 + b % 10 >= 10) return true;
+    return false;
+  }
+  /* 筆算の手続き：a から b をひいたとき、どこかの位で くり下がるか（b ≤ a） */
+  function borrows(a, b) {
+    for (; b > 0; a = Math.floor(a / 10), b = Math.floor(b / 10)) if (a % 10 < b % 10) return true;
+    return false;
+  }
+
+  /* ---------- くり上がりの六角（たし算）：パスカルの偶奇と同じ六角のマスと並び（中心から輪に数え、輪 n の各辺の k 番目）。
+     どのマスも k ＋（n − k）＝ n の筆算で、色2＝どこかの位で くり上がるマス。
+     一の位のくり上がりが10段ごとの階段を、十の位のくり上がりがその10倍の階段を作り、10ずつの入れ子が浮かぶ。
+     明暗の段（dir）は くり上がる位の数 ---------- */
+  function carry(g) {
+    var R = g.edge * 0.5, far = farthest(g) + R * 3, N = Math.ceil(far / (R * 1.5)) + 1, out = [];
+    var D = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+    function hex(q, r) {
+      var cx = g.ox + R * SQ3 * (q + r / 2), cy = g.oy + R * 1.5 * r, p = [];
+      for (var i = 0; i < 6; i++) { var a = Math.PI / 6 + i * Math.PI / 3; p.push([cx + R * Math.cos(a), cy + R * Math.sin(a)]); }
+      return p;
+    }
+    function nc(a, b) { var c = 0; for (; a > 0 || b > 0; a = Math.floor(a / 10), b = Math.floor(b / 10)) if (a % 10 + b % 10 >= 10) c++; return c; }
+    out.push({ p: hex(0, 0), cls: 1, dir: 0 });
+    for (var n = 1; n <= N; n++) {
+      var q = D[4][0] * n, r = D[4][1] * n;
+      for (var s = 0; s < 6; s++) for (var k = 0; k < n; k++) {
+        var p = hex(q, r);
+        if (onScreen(g, p, 0)) { var c = nc(k, n - k); out.push({ p: p, cls: c ? 0 : 1, dir: Math.min(4, c * 2) }); }
+        q += D[s][0]; r += D[s][1];
+      }
+    }
+    return out;
+  }
+
+  /* ---------- くり下がりの三角（ひき算）：三角形のマスを6つの扇に並べる。扇の n 段目は 2n−1 枚の三角（外向き・内向きが交互）。
+     段の j 番目のマスは m − j（m＝段の枚数 2n−2）の筆算で、色2＝どこかの位で くり下がるマス。
+     ひかれる数 m が段ごとに2ずつ増えるので、六角のたし算とは階段の幅と入れ子の位置がずれる ---------- */
+  function borrow(g) {
+    var a = g.edge * 1.05, far = farthest(g) + a * 2, N = Math.ceil(far / (a * SQ3 / 2)) + 1, out = [];
+    function P(i, j, s) {                           // 扇 s の格子点 i·u + j·v（u, v は60°ずつ回した単位）
+      var t = s * Math.PI / 3, u = [Math.cos(t), Math.sin(t)], v = [Math.cos(t + Math.PI / 3), Math.sin(t + Math.PI / 3)];
+      return [g.ox + a * (i * u[0] + j * v[0]), g.oy + a * (i * u[1] + j * v[1])];
+    }
+    function nb(x, y) { var c = 0; for (; y > 0; x = Math.floor(x / 10), y = Math.floor(y / 10)) if (x % 10 < y % 10) c++; return c; }
+    for (var s = 0; s < 6; s++) for (var n = 1; n <= N; n++) {
+      var m = 2 * n - 2;
+      for (var e = 0; e < n; e++) {
+        var i = n - 1 - e, p = [P(i, e, s), P(i + 1, e, s), P(i, e + 1, s)];     // 外向き（j＝2e）
+        if (onScreen(g, p, 0)) { var c = nb(m, 2 * e); out.push({ p: p, cls: c ? 0 : 1, dir: Math.min(4, c * 2) }); }
+        if (e < n - 1) {                                                           // 内向き（j＝2e+1）
+          var q = [P(i, e, s), P(i, e + 1, s), P(i - 1, e + 1, s)];
+          if (onScreen(g, q, 0)) { var c2 = nb(m, 2 * e + 1); out.push({ p: q, cls: c2 ? 0 : 1, dir: Math.min(4, c2 * 2) }); }
+        }
+      }
+    }
+    return out;
+  }
+
   /* ---------- 椅子のタイル：L字（2×2 の箱から1隅を欠いた形）を、半分の大きさのL字4つに分ける置き換え。
      o＝欠けた隅の向き（0..3、90°ずつ）。色は向きの組（0と2／1と3）で分ける ---------- */
   function chair(g) {
@@ -902,7 +962,9 @@
     decimal:   { name: '十進の渦（1周で10倍）',                 make: decimal },
     scaleswirl: { name: '鱗のピル・渦（輪ごとに逆向き・渦の腕で染め分け）', make: makeScales('alt', 'arm') },
     scalefib:   { name: '鱗のピル・フィボナッチ（同じ向き・フィボナッチ語で染め分け）', make: makeScales('same', 'fib') },
-    circlesphere: { name: '円と球（起点2つ：鱗のピルの渦とフィボナッチ球）', make: circleSphere }
+    circlesphere: { name: '円と球（起点2つ：鱗のピルの渦とフィボナッチ球）', make: circleSphere },
+    carry:     { name: 'くり上がりの六角（たし算）',             make: carry },
+    borrow:    { name: 'くり下がりの三角（ひき算）',             make: borrow }
   };
 
   var api = { GENERATORS: GENERATORS, multigrid: multigrid };
