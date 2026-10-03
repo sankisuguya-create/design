@@ -492,17 +492,6 @@
     return out;
   }
 
-  /* 筆算の手続き：a と b をたしたとき、どこかの位で くり上がるか（ひき算 a+b−b でくり下がるのと同じ条件） */
-  function carries(a, b) {
-    for (; a > 0 || b > 0; a = Math.floor(a / 10), b = Math.floor(b / 10)) if (a % 10 + b % 10 >= 10) return true;
-    return false;
-  }
-  /* 筆算の手続き：a から b をひいたとき、どこかの位で くり下がるか（b ≤ a） */
-  function borrows(a, b) {
-    for (; b > 0; a = Math.floor(a / 10), b = Math.floor(b / 10)) if (a % 10 < b % 10) return true;
-    return false;
-  }
-
   /* ---------- くり上がりの六角（たし算）：パスカルの偶奇と同じ六角のマスと並び（中心から輪に数え、輪 n の各辺の k 番目）。
      どのマスも k ＋（n − k）＝ n の筆算で、色2＝どこかの位で くり上がるマス。
      一の位のくり上がりが10段ごとの階段を、十の位のくり上がりがその10倍の階段を作り、10ずつの入れ子が浮かぶ。
@@ -528,24 +517,46 @@
     return out;
   }
 
+  /* 円周率の数字（Rabinowitz–Wagon の栓抜き）。くり下がりの三角の縁に流し込む */
+  var PI_DIGITS = null;
+  function piDigits(n) {
+    if (PI_DIGITS && PI_DIGITS.length >= n) return PI_DIGITS;
+    var len = Math.floor(n * 10 / 3) + 2, a = [], out = [], nines = 0, pre = -1, i, j;
+    for (i = 0; i < len; i++) a[i] = 2;
+    for (j = 0; j < n + 1; j++) {
+      var q = 0;
+      for (i = len - 1; i >= 0; i--) { var x = 10 * a[i] + q * (i + 1); a[i] = x % (2 * i + 1); q = Math.floor(x / (2 * i + 1)); }
+      a[0] = q % 10; q = Math.floor(q / 10);
+      if (q === 9) nines++;
+      else if (q === 10) { out.push(pre + 1); for (; nines > 0; nines--) out.push(0); pre = 0; }
+      else { if (pre >= 0) out.push(pre); pre = q; for (; nines > 0; nines--) out.push(9); }
+    }
+    PI_DIGITS = out;
+    return out;
+  }
+
   /* ---------- くり下がりの三角（ひき算）：三角形のマスを6つの扇に並べる。扇の n 段目は 2n−1 枚の三角（外向き・内向きが交互）。
-     段の j 番目のマスは m − j（m＝段の枚数 2n−2）の筆算で、色2＝どこかの位で くり下がるマス。
-     ひかれる数 m が段ごとに2ずつ増えるので、六角のたし算とは階段の幅と入れ子の位置がずれる ---------- */
+     段の j 番目のマスは m − j の筆算で、色2＝どこかの位で くり下がるマス。ひかれる数 m は段ごとに2ずつ増える。
+     一の位のくり下がりが三角の帯を、十の位のくり下がりがその外の大きな三角を作る。
+     扇ごとに m の始まりをずらす（SHIFT）。そろえると6つの扇が同じ位相になり、大きな三角が市松に並んで周期的に見える。
+     明暗の段（dir）は くり下がる位の数 ---------- */
   function borrow(g) {
     var a = g.edge * 1.05, far = farthest(g) + a * 2, N = Math.ceil(far / (a * SQ3 / 2)) + 1, out = [];
+    var SHIFT = [0, 3, 7, 1, 5, 9];
     function P(i, j, s) {                           // 扇 s の格子点 i·u + j·v（u, v は60°ずつ回した単位）
       var t = s * Math.PI / 3, u = [Math.cos(t), Math.sin(t)], v = [Math.cos(t + Math.PI / 3), Math.sin(t + Math.PI / 3)];
       return [g.ox + a * (i * u[0] + j * v[0]), g.oy + a * (i * u[1] + j * v[1])];
     }
     function nb(x, y) { var c = 0; for (; y > 0; x = Math.floor(x / 10), y = Math.floor(y / 10)) if (x % 10 < y % 10) c++; return c; }
+    function tile(p, m, j) { var c = nb(m, j); out.push({ p: p, cls: c ? 0 : 1, dir: Math.min(4, c * 2) }); }
     for (var s = 0; s < 6; s++) for (var n = 1; n <= N; n++) {
-      var m = 2 * n - 2;
+      var m = 2 * n - 2 + SHIFT[s];
       for (var e = 0; e < n; e++) {
         var i = n - 1 - e, p = [P(i, e, s), P(i + 1, e, s), P(i, e + 1, s)];     // 外向き（j＝2e）
-        if (onScreen(g, p, 0)) { var c = nb(m, 2 * e); out.push({ p: p, cls: c ? 0 : 1, dir: Math.min(4, c * 2) }); }
+        if (onScreen(g, p, 0)) tile(p, m, 2 * e);
         if (e < n - 1) {                                                           // 内向き（j＝2e+1）
           var q = [P(i, e, s), P(i, e + 1, s), P(i - 1, e + 1, s)];
-          if (onScreen(g, q, 0)) { var c2 = nb(m, 2 * e + 1); out.push({ p: q, cls: c2 ? 0 : 1, dir: Math.min(4, c2 * 2) }); }
+          if (onScreen(g, q, 0)) tile(q, m, 2 * e + 1);
         }
       }
     }
