@@ -65,10 +65,11 @@ names.forEach(name => {
     const cov = coverage(tiles, g);
     const shapeOk = tiles.every(t => t.p.length >= 3 && (t.cls === 0 || t.cls === 1) && t.dir >= 0 && t.dir <= 4);
     const probs = [];
-    if (sc.name === 'Chromebook' && (tiles.length < LIMITS.minTiles || tiles.length > LIMITS.maxTiles)) probs.push(`枚数 ${tiles.length}（${LIMITS.minTiles}〜${LIMITS.maxTiles}）`);
+    if (G.tileCount && tiles.length !== G.tileCount) probs.push('規定の円の個数と異なる');
+    if (G.coverage !== 'sparse' && sc.name === 'Chromebook' && (tiles.length < LIMITS.minTiles || tiles.length > LIMITS.maxTiles)) probs.push(`枚数 ${tiles.length}（${LIMITS.minTiles}〜${LIMITS.maxTiles}）`);
     if (ms > LIMITS.maxMs) probs.push(`生成 ${ms.toFixed(0)}ms（${LIMITS.maxMs}ms 以下。実機はこの数倍）`);
     if (share < LIMITS.minShare) probs.push(`色の片寄り（少ない方が ${(share * 100).toFixed(0)}%。${LIMITS.minShare * 100}% 以上）`);
-    if (cov.gap > LIMITS.maxGap) probs.push(`隙間 ${(cov.gap * 100).toFixed(2)}%`);
+    if (G.coverage !== 'sparse' && cov.gap > LIMITS.maxGap) probs.push(`隙間 ${(cov.gap * 100).toFixed(2)}%`);
     if (cov.over > LIMITS.maxGap) probs.push(`重なり ${(cov.over * 100).toFixed(2)}%`);
     if (!shapeOk) probs.push('タイルの形式（p / cls / dir）が仕様と違う');
     const head = `${probs.length ? '✗' : '✓'} ${G.name} [${sc.name}]`;
