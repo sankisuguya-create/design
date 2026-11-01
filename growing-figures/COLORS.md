@@ -33,6 +33,7 @@
 | arithmetic-timeattack | 長さ（length） | 3 | tape | amethyst | 床あり |
 | arithmetic-timeattack | 重さ（weight） | 3 | mandala | amethyst | 床あり |
 | arithmetic-timeattack | 円と球（circle） | 3 | circlesphere | amethyst | 床あり |
+| arithmetic-timeattack | かけ算の筆算(1けた)（kakehissan） | 3 | pascal | amethyst | 床あり |
 
 九九とあまりのあるわり算の図形は、利用者の指示で入れ替えた（色2はサイトの色なので入れ替えていない）。
 
