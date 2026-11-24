@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>待ちの表示</title>
+<style>
+:root{--bg:#fff;--fg:#1f2328;--sub:#55585e;--line:#d0d7de;--btn:#0b57d0}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:16px/1.7 "BIZ UDPGothic","Yu Gothic UI","Yu Gothic","Meiryo","Noto Sans CJK JP","Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif}
+main{max-width:640px;margin:0 auto}
+h1{font-size:22px;margin:0 0 4px}
+p.sub{color:var(--sub);margin:0 0 20px}
+section{border:1px solid var(--line);border-radius:8px;padding:16px;margin:0 0 16px}
+h2{font-size:15px;margin:0 0 8px;color:var(--sub)}
+.big{font-size:22px}
+button{font:inherit;padding:10px 18px;border-radius:8px;border:0;background:var(--btn);color:#fff;opacity:.7}
+pre{background:#f6f8fa;padding:12px;border-radius:6px;overflow-x:auto;font-size:13px}
+/* ここから正本（-/skills/ui-layout/SKILL.md「待ちの表示」）と同じ */
+.ldots{display:inline-block;width:1.6em;text-align:left}
+.ldots::after{content:'';animation:ldots 1.2s steps(1,end) infinite}
+@keyframes ldots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+@media (prefers-reduced-motion:reduce){.ldots::after{animation:none;content:'...'}}
+</style>
+</head>
+<body>
+<main>
+<h1>待ちの表示</h1>
+<p class="sub">終わるまで待つ表示は、点を 0→1→2→3個と増やしてくり返す。止まった「…」は書かない。</p>
+<section><h2>児童の画面（大きめ・ひらがな）</h2><div class="big">よみこみ中<span class="ldots" aria-hidden="true"></span></div></section>
+<section><h2>先生の画面</h2><div>読み込み中<span class="ldots" aria-hidden="true"></span>　保存中<span class="ldots" aria-hidden="true"></span>　送信中<span class="ldots" aria-hidden="true"></span></div></section>
+<section><h2>ボタンの中（幅が動かない）</h2><button disabled>処理中<span class="ldots" aria-hidden="true"></span></button></section>
+<section><h2>書き方</h2>
+<pre>読み込み中&lt;span class="ldots" aria-hidden="true"&gt;&lt;/span&gt;
+
+.ldots{display:inline-block;width:1.6em;text-align:left}
+.ldots::after{content:'';animation:ldots 1.2s steps(1,end) infinite}
+@keyframes ldots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+@media (prefers-reduced-motion:reduce){.ldots::after{animation:none;content:'...'}}</pre>
+<p>付けないもの：未公開の「じゅんび中です」、状態名の「準備中の年度」、エラー文、メニューを開くボタンの「…」。</p>
+</section>
+</main>
+</body>
+</html>
