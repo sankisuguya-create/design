@@ -24,7 +24,7 @@ def hexrgba(h):
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4)) + (255,)
 
 
-def make(text, font, overlap, stretch, stroke, line, fill, size=64, work=512, front='left', inner=6):
+def make(text, font, overlap, stretch, stroke, line, fill, size=64, work=512, front='left', inner=6, bg=None, scale=0.68):
     """text の各文字を overlap（字の幅に対する重なりの割合）でずらして重ねる。stroke は縁の太さ（作業用の大きさ 300px の字に対する px）"""
     d0 = ImageDraw.Draw(Image.new('L', (1, 1)))
     F = ImageFont.truetype(font, 300)
@@ -51,9 +51,11 @@ def make(text, font, overlap, stretch, stroke, line, fill, size=64, work=512, fr
         canvas.paste(fill, (0, 0), m)
     im = canvas.crop(canvas.getbbox())
     im = im.resize((im.width, int(im.height * stretch)), Image.LANCZOS)  # 縦に伸ばす
-    sc = work * 0.98 / max(im.size)
+    sc = work * (scale if bg else 0.98) / max(im.size)
     im = im.resize((max(1, int(im.width * sc)), max(1, int(im.height * sc))), Image.LANCZOS)
     out = Image.new('RGBA', (work, work), (0, 0, 0, 0))
+    if bg:  # 最背面の円
+        ImageDraw.Draw(out).ellipse([0, 0, work - 1, work - 1], fill=bg)
     out.paste(im, ((work - im.width) // 2, (work - im.height) // 2), im)
     return out.resize((size, size), Image.LANCZOS)  # 大きく描いて縮める（縁がなめらかになる）
 
@@ -81,13 +83,15 @@ def main():
     ap.add_argument('--fill', default='#ffffff', help='字の中の色')
     ap.add_argument('--front', choices=['left', 'right'], default='left', help='どちらの端の字を手前にするか。SSS は left')
     ap.add_argument('--inner', type=int, default=6, help='手前の字が奥の字に重なる所の縁の太さ（--stroke と同じ数え方）。SSS は 6')
+    ap.add_argument('--bg', help='最背面の円の色（例 #DCE8F5）。省くと円なし')
+    ap.add_argument('--scale', type=float, default=0.68, help='円がある時の文字の大きさ（円の直径に対する割合）')
     ap.add_argument('--size', type=int, default=64)
     ap.add_argument('--b64', action='store_true', help='base64 を標準出力に出す（GAS のコードに貼る）')
     ap.add_argument('--preview', help='見本の画像の保存先')
     a = ap.parse_args()
     if not a.font:
         sys.exit('太いフォントが見つかりません。--font で指定してください')
-    im = make(a.text, a.font, a.overlap, a.stretch, a.stroke, hexrgba(a.line), hexrgba(a.fill), a.size, front=a.front, inner=a.inner)
+    im = make(a.text, a.font, a.overlap, a.stretch, a.stroke, hexrgba(a.line), hexrgba(a.fill), a.size, front=a.front, inner=a.inner, bg=hexrgba(a.bg) if a.bg else None, scale=a.scale)
     im.save(a.out, optimize=True)
     if a.preview:
         preview(im, a.preview)
