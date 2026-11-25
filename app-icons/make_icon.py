@@ -12,7 +12,7 @@
 要るもの：Python 3、Pillow（pip install pillow）、太いフォント（既定は Inter Display ExtraBold）。
 """
 import argparse, base64, glob, io, sys
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageFilter
 
 FONTS = ['/usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf',
          '/usr/share/fonts/opentype/inter/Inter-ExtraBold.otf',
@@ -24,7 +24,7 @@ def hexrgba(h):
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4)) + (255,)
 
 
-def make(text, font, overlap, stretch, stroke, line, fill, size=64, work=512, front='left'):
+def make(text, font, overlap, stretch, stroke, line, fill, size=64, work=512, front='left', inner=6):
     """text の各文字を overlap（字の幅に対する重なりの割合）でずらして重ねる。stroke は縁の太さ（作業用の大きさ 300px の字に対する px）"""
     d0 = ImageDraw.Draw(Image.new('L', (1, 1)))
     F = ImageFont.truetype(font, 300)
@@ -39,10 +39,15 @@ def make(text, font, overlap, stretch, stroke, line, fill, size=64, work=512, fr
         x += (bb[2] - bb[0]) * (1 - overlap)
     if front == 'left':
         places.reverse()  # 右から置き、左の字を最後に置いて手前にする
+    ki = max(1, inner) * 2 + 1
     for c, bb, x in places:  # 後から置く字が前の字を隠す
         m = Image.new('L', (W, W), 0)
         ImageDraw.Draw(m).text((x - bb[0], 100 - bb[1]), c, font=F, fill=255)
-        canvas.paste(line, (0, 0), m.filter(ImageFilter.MaxFilter(k)))
+        thick, thin = m.filter(ImageFilter.MaxFilter(k)), m.filter(ImageFilter.MaxFilter(ki))
+        under = canvas.getchannel('A')  # すでに置いた（奥の）字のある所
+        # 外側は太い縁、奥の字に重なる所は細い縁（境目だけ見せ、奥の字を削りすぎない）
+        edge = ImageChops.add(ImageChops.multiply(thick, ImageChops.invert(under)), ImageChops.multiply(thin, under))
+        canvas.paste(line, (0, 0), edge)
         canvas.paste(fill, (0, 0), m)
     im = canvas.crop(canvas.getbbox())
     im = im.resize((im.width, int(im.height * stretch)), Image.LANCZOS)  # 縦に伸ばす
@@ -75,13 +80,14 @@ def main():
     ap.add_argument('--line', default='#606870', help='縁の色（既定は灰色：児童の目を引かない）')
     ap.add_argument('--fill', default='#ffffff', help='字の中の色')
     ap.add_argument('--front', choices=['left', 'right'], default='left', help='どちらの端の字を手前にするか。SSS は left')
+    ap.add_argument('--inner', type=int, default=6, help='手前の字が奥の字に重なる所の縁の太さ（--stroke と同じ数え方）。SSS は 6')
     ap.add_argument('--size', type=int, default=64)
     ap.add_argument('--b64', action='store_true', help='base64 を標準出力に出す（GAS のコードに貼る）')
     ap.add_argument('--preview', help='見本の画像の保存先')
     a = ap.parse_args()
     if not a.font:
         sys.exit('太いフォントが見つかりません。--font で指定してください')
-    im = make(a.text, a.font, a.overlap, a.stretch, a.stroke, hexrgba(a.line), hexrgba(a.fill), a.size, front=a.front)
+    im = make(a.text, a.font, a.overlap, a.stretch, a.stroke, hexrgba(a.line), hexrgba(a.fill), a.size, front=a.front, inner=a.inner)
     im.save(a.out, optimize=True)
     if a.preview:
         preview(im, a.preview)
