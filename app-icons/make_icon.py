@@ -65,7 +65,7 @@ def main():
     ap.add_argument('-o', '--out', default='icon.png')
     ap.add_argument('--font', default=next((f for f in FONTS if glob.glob(f)), None))
     ap.add_argument('--overlap', type=float, default=.50, help='重なり（字の幅に対する割合）。SSS は .50')
-    ap.add_argument('--stretch', type=float, default=1.6, help='縦の伸ばし。SSS は 1.6')
+    ap.add_argument('--stretch', type=float, default=1.45, help='縦の伸ばし。SSS は 1.45')
     ap.add_argument('--stroke', type=int, default=23, help='縁の太さ（300px の字に対する px）')
     ap.add_argument('--line', default='#606870', help='縁の色（既定は灰色：児童の目を引かない）')
     ap.add_argument('--fill', default='#ffffff', help='字の中の色')
