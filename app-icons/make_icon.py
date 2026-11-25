@@ -83,7 +83,7 @@ def main():
     ap.add_argument('--fill', default='#ffffff', help='字の中の色')
     ap.add_argument('--front', choices=['left', 'right'], default='left', help='どちらの端の字を手前にするか。SSS は left')
     ap.add_argument('--inner', type=int, default=6, help='手前の字が奥の字に重なる所の縁の太さ（--stroke と同じ数え方）。SSS は 6')
-    ap.add_argument('--bg', help='最背面の円の色（例 #DCE8F5）。省くと円なし')
+    ap.add_argument('--bg', help='最背面の円の色。SSS は #606870（縁と同じ灰色）。省くと円なし')
     ap.add_argument('--scale', type=float, default=0.68, help='円がある時の文字の大きさ（円の直径に対する割合）')
     ap.add_argument('--size', type=int, default=64)
     ap.add_argument('--b64', action='store_true', help='base64 を標準出力に出す（GAS のコードに貼る）')
